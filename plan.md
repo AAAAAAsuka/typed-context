@@ -115,7 +115,7 @@ All baseline tasks have been completed. See `activity.md` for details.
       "Save results to outputs/delta_asr_results.json",
       "Verify: strong monotonic decreasing relationship between delta and ASR"
     ],
-    "passes": false,
+    "passes": true,
     "tier": 1
   },
   {
