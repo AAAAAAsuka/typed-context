@@ -1,0 +1,54 @@
+{
+  "target_subspaces": [
+    59,
+    60,
+    61,
+    62,
+    63
+  ],
+  "threshold": 0.01,
+  "ablation_results": {
+    "baseline": {
+      "mean_ppl": 10.1058854699239,
+      "std_ppl": 3.046995025994491,
+      "ablated_subspaces": [],
+      "relative_change": 0.0
+    },
+    "high_freq_top5": {
+      "mean_ppl": 11.595910267646982,
+      "std_ppl": 3.455487194644701,
+      "ablated_subspaces": [
+        4,
+        3,
+        2,
+        1,
+        0
+      ],
+      "relative_change": 0.1474412907367238
+    },
+    "low_freq_top5": {
+      "mean_ppl": 10.098372259178412,
+      "std_ppl": 3.040996780238937,
+      "ablated_subspaces": [
+        63,
+        62,
+        61,
+        60,
+        59
+      ],
+      "relative_change": -0.0007434490295628325
+    },
+    "mid_random5": {
+      "mean_ppl": 10.28744483491216,
+      "std_ppl": 3.126495623784299,
+      "ablated_subspaces": [
+        16,
+        29,
+        28,
+        17,
+        19
+      ],
+      "relative_change": 0.01796570577893431
+    }
+  }
+}

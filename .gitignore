@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.cache/
+.claude/
+.mcp.json
+*.bak
+outputs/hidden_states/
+outputs/lora_adapter/

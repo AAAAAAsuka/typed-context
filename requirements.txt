@@ -1,0 +1,10 @@
+torch>=2.1
+transformers>=4.40
+peft>=0.10
+accelerate
+scikit-learn
+numpy
+matplotlib
+seaborn
+datasets
+bitsandbytes

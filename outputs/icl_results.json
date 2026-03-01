@@ -1,0 +1,42 @@
+{
+  "A": {
+    "strict_ASR": 0.194,
+    "soft_ASR": 0.435,
+    "success": 97,
+    "partial": 241,
+    "fail": 162,
+    "total": 500
+  },
+  "B": {
+    "strict_ASR": 0.254,
+    "soft_ASR": 0.421,
+    "success": 127,
+    "partial": 167,
+    "fail": 206,
+    "total": 500
+  },
+  "C": {
+    "strict_ASR": 0.348,
+    "soft_ASR": 0.593,
+    "success": 174,
+    "partial": 245,
+    "fail": 81,
+    "total": 500
+  },
+  "D": {
+    "strict_ASR": 0.306,
+    "soft_ASR": 0.473,
+    "success": 153,
+    "partial": 167,
+    "fail": 180,
+    "total": 500
+  },
+  "E": {
+    "strict_ASR": 0.304,
+    "soft_ASR": 0.448,
+    "success": 152,
+    "partial": 144,
+    "fail": 204,
+    "total": 500
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "baseline": {
+    "strict_ASR": 0.335,
+    "soft_ASR": 0.53,
+    "success": 67,
+    "partial": 78,
+    "fail": 55,
+    "total": 200,
+    "per_category": {
+      "extraction": 0.432,
+      "override": 0.17333333333333334
+    }
+  },
+  "lora_no_rotation": {
+    "strict_ASR": 0.065,
+    "soft_ASR": 0.1575,
+    "success": 13,
+    "partial": 37,
+    "fail": 150,
+    "total": 200,
+    "per_category": {
+      "extraction": 0.056,
+      "override": 0.08
+    }
+  },
+  "lora_with_rotation": {
+    "strict_ASR": 0.065,
+    "soft_ASR": 0.18,
+    "success": 13,
+    "partial": 46,
+    "fail": 141,
+    "total": 200,
+    "per_category": {
+      "extraction": 0.072,
+      "override": 0.05333333333333334
+    }
+  },
+  "lora_rotation_removed": {
+    "strict_ASR": 0.065,
+    "soft_ASR": 0.145,
+    "success": 13,
+    "partial": 32,
+    "fail": 155,
+    "total": 200,
+    "per_category": {
+      "extraction": 0.048,
+      "override": 0.09333333333333334
+    }
+  }
+}

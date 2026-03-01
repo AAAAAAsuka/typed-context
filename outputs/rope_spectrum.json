@@ -1,0 +1,809 @@
+{
+  "results": [
+    {
+      "subspace": 0,
+      "dim_pair": [
+        0,
+        1
+      ],
+      "frequency": 1.0,
+      "wavelength": 6.283185307179586,
+      "rotations_in_context": 6518.986469044034,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 1,
+      "dim_pair": [
+        2,
+        3
+      ],
+      "frequency": 0.8058421877614819,
+      "wavelength": 7.79704190547954,
+      "rotations_in_context": 5253.274318201942,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 2,
+      "dim_pair": [
+        4,
+        5
+      ],
+      "frequency": 0.6493816315762113,
+      "wavelength": 9.675643722673103,
+      "rotations_in_context": 4233.310069491059,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 3,
+      "dim_pair": [
+        6,
+        7
+      ],
+      "frequency": 0.5232991146814947,
+      "wavelength": 12.00687165504539,
+      "rotations_in_context": 3411.3798478713857,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 4,
+      "dim_pair": [
+        8,
+        9
+      ],
+      "frequency": 0.4216965034285823,
+      "wavelength": 14.89978042524532,
+      "rotations_in_context": 2749.033799894109,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 5,
+      "dim_pair": [
+        10,
+        11
+      ],
+      "frequency": 0.3398208328942559,
+      "wavelength": 18.489700156596236,
+      "rotations_in_context": 2215.2874115369277,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 6,
+      "dim_pair": [
+        12,
+        13
+      ],
+      "frequency": 0.27384196342643613,
+      "wavelength": 22.944567109297246,
+      "rotations_in_context": 1785.1720542333883,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 7,
+      "dim_pair": [
+        14,
+        15
+      ],
+      "frequency": 0.220673406908459,
+      "wavelength": 28.47277973002888,
+      "rotations_in_context": 1438.5669537140923,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 8,
+      "dim_pair": [
+        16,
+        17
+      ],
+      "frequency": 0.1778279410038923,
+      "wavelength": 35.33294752055899,
+      "rotations_in_context": 1159.2579412223345,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 9,
+      "dim_pair": [
+        18,
+        19
+      ],
+      "frequency": 0.14330125702369628,
+      "wavelength": 43.84598877692049,
+      "rotations_in_context": 934.1789555344773,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 10,
+      "dim_pair": [
+        20,
+        21
+      ],
+      "frequency": 0.11547819846894583,
+      "wavelength": 54.41014313077674,
+      "rotations_in_context": 752.8008132886392,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 11,
+      "dim_pair": [
+        22,
+        23
+      ],
+      "frequency": 0.0930572040929699,
+      "wavelength": 67.51960117888665,
+      "rotations_in_context": 606.6386543291399,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 12,
+      "dim_pair": [
+        24,
+        25
+      ],
+      "frequency": 0.07498942093324558,
+      "wavelength": 83.78762269377677,
+      "rotations_in_context": 488.8550203852753,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 13,
+      "dim_pair": [
+        26,
+        27
+      ],
+      "frequency": 0.06042963902381328,
+      "wavelength": 103.97522488432531,
+      "rotations_in_context": 393.939999125454,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 14,
+      "dim_pair": [
+        28,
+        29
+      ],
+      "frequency": 0.04869675251658631,
+      "wavelength": 129.0267827416111,
+      "rotations_in_context": 317.45347074201214,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 15,
+      "dim_pair": [
+        30,
+        31
+      ],
+      "frequency": 0.03924189758484536,
+      "wavelength": 160.1142068523735,
+      "rotations_in_context": 255.81739937521863,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 16,
+      "dim_pair": [
+        32,
+        33
+      ],
+      "frequency": 0.03162277660168379,
+      "wavelength": 198.69176531592203,
+      "rotations_in_context": 206.14845277997887,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 17,
+      "dim_pair": [
+        34,
+        35
+      ],
+      "frequency": 0.025482967479793464,
+      "wavelength": 246.56411433094647,
+      "rotations_in_context": 166.1231201918627,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 18,
+      "dim_pair": [
+        36,
+        37
+      ],
+      "frequency": 0.020535250264571463,
+      "wavelength": 305.97071991957563,
+      "rotations_in_context": 133.8690186131743,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 19,
+      "dim_pair": [
+        38,
+        39
+      ],
+      "frequency": 0.016548170999431816,
+      "wavelength": 379.6906200325897,
+      "rotations_in_context": 107.87730283272289,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 20,
+      "dim_pair": [
+        40,
+        41
+      ],
+      "frequency": 0.01333521432163324,
+      "wavelength": 471.1724278016739,
+      "rotations_in_context": 86.9320817245293,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 21,
+      "dim_pair": [
+        42,
+        43
+      ],
+      "frequency": 0.010746078283213174,
+      "wavelength": 584.6956574841605,
+      "rotations_in_context": 70.05353892355461,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 22,
+      "dim_pair": [
+        44,
+        45
+      ],
+      "frequency": 0.008659643233600653,
+      "wavelength": 725.5709199196486,
+      "rotations_in_context": 56.45209706659137,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 23,
+      "dim_pair": [
+        46,
+        47
+      ],
+      "frequency": 0.006978305848598663,
+      "wavelength": 900.3883526316539,
+      "rotations_in_context": 45.49148140386553,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 24,
+      "dim_pair": [
+        48,
+        49
+      ],
+      "frequency": 0.005623413251903491,
+      "wavelength": 1117.3259061216543,
+      "rotations_in_context": 36.65895489900176,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 25,
+      "dim_pair": [
+        50,
+        51
+      ],
+      "frequency": 0.004531583637600818,
+      "wavelength": 1386.5319079724916,
+      "rotations_in_context": 29.541332416861074,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 26,
+      "dim_pair": [
+        52,
+        53
+      ],
+      "frequency": 0.003651741272548377,
+      "wavelength": 1720.599801090193,
+      "rotations_in_context": 23.80565194419251,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 27,
+      "dim_pair": [
+        54,
+        55
+      ],
+      "frequency": 0.0029427271762092816,
+      "wavelength": 2135.1572643147183,
+      "rotations_in_context": 19.183598643796465,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 28,
+      "dim_pair": [
+        56,
+        57
+      ],
+      "frequency": 0.0023713737056616554,
+      "wavelength": 2649.597274431474,
+      "rotations_in_context": 15.458953100255139,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 29,
+      "dim_pair": [
+        58,
+        59
+      ],
+      "frequency": 0.0019109529749704406,
+      "wavelength": 3287.9853086268527,
+      "rotations_in_context": 12.457476586811744,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 30,
+      "dim_pair": [
+        60,
+        61
+      ],
+      "frequency": 0.0015399265260594918,
+      "wavelength": 4080.185126271959,
+      "rotations_in_context": 10.038760186703811,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 31,
+      "dim_pair": [
+        62,
+        63
+      ],
+      "frequency": 0.0012409377607517195,
+      "wavelength": 5063.255794048396,
+      "rotations_in_context": 8.089656471266261,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 32,
+      "dim_pair": [
+        64,
+        65
+      ],
+      "frequency": 0.001,
+      "wavelength": 6283.185307179586,
+      "rotations_in_context": 6.518986469044034,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 33,
+      "dim_pair": [
+        66,
+        67
+      ],
+      "frequency": 0.0008058421877614819,
+      "wavelength": 7797.04190547954,
+      "rotations_in_context": 5.2532743182019415,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 34,
+      "dim_pair": [
+        68,
+        69
+      ],
+      "frequency": 0.0006493816315762112,
+      "wavelength": 9675.643722673103,
+      "rotations_in_context": 4.233310069491059,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 35,
+      "dim_pair": [
+        70,
+        71
+      ],
+      "frequency": 0.0005232991146814947,
+      "wavelength": 12006.87165504539,
+      "rotations_in_context": 3.411379847871386,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 36,
+      "dim_pair": [
+        72,
+        73
+      ],
+      "frequency": 0.0004216965034285823,
+      "wavelength": 14899.780425245319,
+      "rotations_in_context": 2.7490337998941086,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 37,
+      "dim_pair": [
+        74,
+        75
+      ],
+      "frequency": 0.0003398208328942559,
+      "wavelength": 18489.700156596235,
+      "rotations_in_context": 2.2152874115369277,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 38,
+      "dim_pair": [
+        76,
+        77
+      ],
+      "frequency": 0.00027384196342643616,
+      "wavelength": 22944.567109297244,
+      "rotations_in_context": 1.7851720542333884,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 39,
+      "dim_pair": [
+        78,
+        79
+      ],
+      "frequency": 0.000220673406908459,
+      "wavelength": 28472.77973002888,
+      "rotations_in_context": 1.4385669537140924,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 40,
+      "dim_pair": [
+        80,
+        81
+      ],
+      "frequency": 0.00017782794100389227,
+      "wavelength": 35332.94752055899,
+      "rotations_in_context": 1.1592579412223343,
+      "category": "USEFUL"
+    },
+    {
+      "subspace": 41,
+      "dim_pair": [
+        82,
+        83
+      ],
+      "frequency": 0.00014330125702369627,
+      "wavelength": 43845.988776920494,
+      "rotations_in_context": 0.9341789555344772,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 42,
+      "dim_pair": [
+        84,
+        85
+      ],
+      "frequency": 0.00011547819846894582,
+      "wavelength": 54410.14313077675,
+      "rotations_in_context": 0.7528008132886391,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 43,
+      "dim_pair": [
+        86,
+        87
+      ],
+      "frequency": 9.30572040929699e-05,
+      "wavelength": 67519.60117888665,
+      "rotations_in_context": 0.6066386543291399,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 44,
+      "dim_pair": [
+        88,
+        89
+      ],
+      "frequency": 7.498942093324559e-05,
+      "wavelength": 83787.62269377676,
+      "rotations_in_context": 0.48885502038527534,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 45,
+      "dim_pair": [
+        90,
+        91
+      ],
+      "frequency": 6.0429639023813276e-05,
+      "wavelength": 103975.22488432532,
+      "rotations_in_context": 0.393939999125454,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 46,
+      "dim_pair": [
+        92,
+        93
+      ],
+      "frequency": 4.869675251658631e-05,
+      "wavelength": 129026.78274161111,
+      "rotations_in_context": 0.31745347074201213,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 47,
+      "dim_pair": [
+        94,
+        95
+      ],
+      "frequency": 3.9241897584845363e-05,
+      "wavelength": 160114.2068523735,
+      "rotations_in_context": 0.25581739937521863,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 48,
+      "dim_pair": [
+        96,
+        97
+      ],
+      "frequency": 3.1622776601683795e-05,
+      "wavelength": 198691.765315922,
+      "rotations_in_context": 0.2061484527799789,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 49,
+      "dim_pair": [
+        98,
+        99
+      ],
+      "frequency": 2.5482967479793468e-05,
+      "wavelength": 246564.11433094644,
+      "rotations_in_context": 0.16612312019186276,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 50,
+      "dim_pair": [
+        100,
+        101
+      ],
+      "frequency": 2.0535250264571462e-05,
+      "wavelength": 305970.7199195756,
+      "rotations_in_context": 0.13386901861317427,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 51,
+      "dim_pair": [
+        102,
+        103
+      ],
+      "frequency": 1.6548170999431813e-05,
+      "wavelength": 379690.6200325898,
+      "rotations_in_context": 0.10787730283272286,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 52,
+      "dim_pair": [
+        104,
+        105
+      ],
+      "frequency": 1.333521432163324e-05,
+      "wavelength": 471172.42780167394,
+      "rotations_in_context": 0.08693208172452929,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 53,
+      "dim_pair": [
+        106,
+        107
+      ],
+      "frequency": 1.0746078283213174e-05,
+      "wavelength": 584695.6574841606,
+      "rotations_in_context": 0.07005353892355462,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 54,
+      "dim_pair": [
+        108,
+        109
+      ],
+      "frequency": 8.659643233600654e-06,
+      "wavelength": 725570.9199196486,
+      "rotations_in_context": 0.05645209706659138,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 55,
+      "dim_pair": [
+        110,
+        111
+      ],
+      "frequency": 6.978305848598664e-06,
+      "wavelength": 900388.3526316538,
+      "rotations_in_context": 0.045491481403865525,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 56,
+      "dim_pair": [
+        112,
+        113
+      ],
+      "frequency": 5.623413251903491e-06,
+      "wavelength": 1117325.9061216542,
+      "rotations_in_context": 0.03665895489900176,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 57,
+      "dim_pair": [
+        114,
+        115
+      ],
+      "frequency": 4.531583637600818e-06,
+      "wavelength": 1386531.9079724916,
+      "rotations_in_context": 0.029541332416861073,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 58,
+      "dim_pair": [
+        116,
+        117
+      ],
+      "frequency": 3.651741272548377e-06,
+      "wavelength": 1720599.801090193,
+      "rotations_in_context": 0.02380565194419251,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 59,
+      "dim_pair": [
+        118,
+        119
+      ],
+      "frequency": 2.942727176209282e-06,
+      "wavelength": 2135157.264314718,
+      "rotations_in_context": 0.019183598643796467,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 60,
+      "dim_pair": [
+        120,
+        121
+      ],
+      "frequency": 2.3713737056616556e-06,
+      "wavelength": 2649597.2744314736,
+      "rotations_in_context": 0.015458953100255142,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 61,
+      "dim_pair": [
+        122,
+        123
+      ],
+      "frequency": 1.9109529749704404e-06,
+      "wavelength": 3287985.308626853,
+      "rotations_in_context": 0.012457476586811744,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 62,
+      "dim_pair": [
+        124,
+        125
+      ],
+      "frequency": 1.539926526059492e-06,
+      "wavelength": 4080185.1262719585,
+      "rotations_in_context": 0.010038760186703811,
+      "category": "LOW_FREQ"
+    },
+    {
+      "subspace": 63,
+      "dim_pair": [
+        126,
+        127
+      ],
+      "frequency": 1.2409377607517195e-06,
+      "wavelength": 5063255.794048396,
+      "rotations_in_context": 0.008089656471266261,
+      "category": "LOW_FREQ"
+    }
+  ],
+  "summary": {
+    "num_subspaces": 64,
+    "high_freq_count": 0,
+    "useful_count": 41,
+    "low_freq_count": 23,
+    "high_freq_indices": [],
+    "useful_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40
+    ],
+    "low_freq_indices": [
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63
+    ],
+    "candidate_subspaces": [
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63
+    ],
+    "model_name": "Qwen/Qwen3-8B-FP8"
+  }
+}
