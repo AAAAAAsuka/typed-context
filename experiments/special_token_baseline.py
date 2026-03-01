@@ -17,7 +17,6 @@ wrapped with [SYS_START]/[SYS_END] text markers. The model learns to
 treat text within these markers as trusted system instructions.
 
 Usage:
-    python experiments/special_token_baseline.py --synthetic
     python experiments/special_token_baseline.py --train
     python experiments/special_token_baseline.py --evaluate
     python experiments/special_token_baseline.py --train --evaluate
@@ -235,72 +234,10 @@ def load_benchmark_samples(max_samples=200):
     return samples
 
 
-def run_synthetic():
-    """Synthetic mode: simulate training and evaluation results."""
-    print("=== Synthetic Mode ===\n")
-
-    # Simulate training
-    loss_history = [2.5, 1.7, 1.3]
-    os.makedirs(ADAPTER_DIR, exist_ok=True)
-    with open(os.path.join(ADAPTER_DIR, "training_log.json"), "w") as f:
-        json.dump({
-            "loss_history": loss_history,
-            "epochs": 3,
-            "lr": 2e-5,
-            "defense_type": "special_token",
-            "delimiters": {"start": SYS_START, "end": SYS_END},
-        }, f, indent=2)
-    print(f"Synthetic training log saved to {ADAPTER_DIR}/training_log.json")
-    print(f"Simulated loss: {loss_history}")
-
-    # Simulate evaluation results
-    # Special token defense: reduces ASR but not as much as rotation defense
-    # Baseline ASR ~42%, Special token ASR ~25% (vs rotation ~18%)
-    results = {
-        "special_token_with_delimiters": {
-            "strict_ASR": 0.25,
-            "soft_ASR": 0.38,
-            "benign_acc": 0.92,
-            "per_category": {
-                "extraction": 0.30,
-                "override": 0.22,
-                "role_play": 0.20,
-                "smuggling": 0.28,
-            }
-        },
-        "special_token_no_delimiters": {
-            "strict_ASR": 0.38,
-            "soft_ASR": 0.50,
-            "benign_acc": 0.93,
-            "per_category": {
-                "extraction": 0.45,
-                "override": 0.35,
-                "role_play": 0.32,
-                "smuggling": 0.40,
-            }
-        },
-        "baseline_reference": {
-            "strict_ASR": 0.42,
-            "soft_ASR": 0.55,
-            "benign_acc": 0.95,
-        },
-    }
-
-    results_path = os.path.join(OUTPUT_DIR, "special_token_eval_results.json")
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    with open(results_path, "w") as f:
-        json.dump(results, f, indent=2)
-    print(f"\nSynthetic evaluation results saved to {results_path}")
-
-    return results
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="P1: Special token defense baseline"
     )
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Synthetic mode (no GPU needed)")
     parser.add_argument("--train", action="store_true",
                         help="Run training")
     parser.add_argument("--evaluate", action="store_true",
@@ -315,43 +252,11 @@ def main():
     parser.add_argument("--max-eval-samples", type=int, default=200)
     args = parser.parse_args()
 
-    if args.synthetic:
-        results = run_synthetic()
-
-        # Verification
-        print("\n=== Verification ===")
-        log_path = os.path.join(ADAPTER_DIR, "training_log.json")
-        with open(log_path) as f:
-            log = json.load(f)
-        losses = log["loss_history"]
-        if len(losses) >= 2 and losses[-1] < losses[0]:
-            print(f"  PASS: loss decreased ({losses[0]:.4f} -> {losses[-1]:.4f})")
-        else:
-            print(f"  CHECK: loss = {losses}")
-
-        asr_with = results["special_token_with_delimiters"]["strict_ASR"]
-        asr_base = results["baseline_reference"]["strict_ASR"]
-        if asr_with < asr_base:
-            print(f"  PASS: ASR with delimiters ({asr_with:.2f}) < baseline ({asr_base:.2f})")
-        else:
-            print(f"  FAIL: ASR not reduced")
-
-        asr_no = results["special_token_no_delimiters"]["strict_ASR"]
-        if asr_no > asr_with:
-            print(f"  PASS: Removing delimiters increases ASR "
-                  f"({asr_with:.2f} -> {asr_no:.2f})")
-        else:
-            print(f"  CHECK: Delimiter removal didn't increase ASR")
-
-        print("\nDone!")
-        return
-
-    # Real mode: need GPU and model
     import torch
     from peft import PeftModel
 
     if not args.train and not args.evaluate:
-        print("Specify --train and/or --evaluate (or --synthetic)")
+        print("Specify --train and/or --evaluate")
         sys.exit(1)
 
     # Load model

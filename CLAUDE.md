@@ -1,6 +1,19 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+每次更新可用的代码后, git push到储存库
+尽可能只使用GPU0, 有140G 显存, 可以全部使用已加快速度
+每次git push 前, double check确保代码正确
+你可以用 CUDA_VISIBLE_DEVICES=0 python 运行代码
+
+## CRITICAL: 禁止使用虚假数据
+
+**所有实验必须真实运行。严禁使用任何形式的虚假数据、占位符结果、或 synthetic 模式。**
+- 所有 `--synthetic` 标志已从代码中删除
+- 禁止生成硬编码的假结果或模拟数据来代替真实实验
+- 所有输出数据必须来自真实模型推理
+- 如果实验无法运行（缺少 GPU、模型等），应报错退出而非使用占位符
+- 没有真实结果的实验需要补充运行
 
 ## Project Overview
 
@@ -23,7 +36,7 @@ python -m pytest model/test_typed_rope.py -v
 python verify_setup.py
 ```
 
-### Run experiments (all scripts support `--synthetic` for CPU-only mode without GPU/model)
+### Run experiments (all scripts require GPU)
 ```bash
 # Phase 1: Data generation, hidden state extraction, linear probing
 python data/build_probe_data.py --all
@@ -32,19 +45,19 @@ python analysis/linear_probe.py
 
 # Phase 2: RoPE analysis
 python analysis/rope_analysis.py --from-config
-python analysis/rope_ablation.py --synthetic
+python analysis/rope_ablation.py
 
 # Phase 3: ICL experiments
-python experiments/ppl_sweep.py --synthetic
-python experiments/attention_analysis.py --synthetic
+python experiments/ppl_sweep.py
+python experiments/attention_analysis.py
 python experiments/icl_experiment.py --all
 
 # Phase 3.5: Quantization robustness
-python experiments/quantization_check.py --synthetic
+python experiments/quantization_check.py
 
 # Phase 4: LoRA finetuning and evaluation
-python experiments/lora_train.py --synthetic
-python experiments/evaluate_lora.py --synthetic
+python experiments/lora_train.py
+python experiments/evaluate_lora.py
 ```
 
 ## Architecture
@@ -65,7 +78,6 @@ python experiments/evaluate_lora.py --synthetic
 
 - **Hook-based patching**: Type rotation injected via PyTorch forward hooks on rotary embedding modules — no model weight modification needed
 - **Persistent signal**: Type rotation applied at every attention layer through RoPE, so it cannot be diluted through network depth
-- **Synthetic mode**: Every experiment script supports `--synthetic` for CPU-only validation without loading the full model
 - **Type rotation formula**: Standard RoPE uses `angle = position * frequency`; Typed RoPE replaces this with `angle = type_id * rotation_angle` in target subspaces only
 
 ### 4-Phase Research Design

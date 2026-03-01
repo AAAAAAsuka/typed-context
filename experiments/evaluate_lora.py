@@ -11,7 +11,6 @@ Generates Figure 10 (ASR bar chart) and Figure 11 (radar chart).
 
 Usage:
     python experiments/evaluate_lora.py                 # full eval (needs GPU)
-    python experiments/evaluate_lora.py --synthetic     # synthetic results
 """
 
 import argparse
@@ -32,40 +31,6 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "outputs")
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 CONFIG_DIR = os.path.join(PROJECT_ROOT, "configs")
-
-
-def run_synthetic_evaluation():
-    """Synthetic evaluation results."""
-    return {
-        "baseline": {
-            "strict_ASR": 0.42, "soft_ASR": 0.55, "benign_acc": 0.95,
-            "per_category": {
-                "extraction": 0.50, "override": 0.40,
-                "role_play": 0.35, "smuggling": 0.45,
-            }
-        },
-        "lora_no_rotation": {
-            "strict_ASR": 0.30, "soft_ASR": 0.42, "benign_acc": 0.93,
-            "per_category": {
-                "extraction": 0.35, "override": 0.28,
-                "role_play": 0.25, "smuggling": 0.32,
-            }
-        },
-        "lora_with_rotation": {
-            "strict_ASR": 0.18, "soft_ASR": 0.28, "benign_acc": 0.91,
-            "per_category": {
-                "extraction": 0.20, "override": 0.15,
-                "role_play": 0.18, "smuggling": 0.20,
-            }
-        },
-        "lora_rotation_removed": {
-            "strict_ASR": 0.35, "soft_ASR": 0.48, "benign_acc": 0.92,
-            "per_category": {
-                "extraction": 0.40, "override": 0.33,
-                "role_play": 0.30, "smuggling": 0.38,
-            }
-        },
-    }
 
 
 def generate_figure10(results, output_dir=OUTPUT_DIR):
@@ -219,7 +184,6 @@ def evaluate_condition(model, tokenizer, samples, hooks=None):
 
 def main():
     parser = argparse.ArgumentParser(description="LoRA evaluation with ablation")
-    parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
     parser.add_argument("--config", default=None,
@@ -228,81 +192,78 @@ def main():
     parser.add_argument("--num-samples", type=int, default=200)
     args = parser.parse_args()
 
-    if args.synthetic:
-        results = run_synthetic_evaluation()
+    import torch
+    from peft import PeftModel
+    from utils import load_model, load_model_from_config
+    from model.hook_attention import install_type_rotation_hooks
+    from analysis.extract_hidden_states import load_jsonl
+
+    # Load config
+    ts_path = os.path.join(args.config_dir, "target_subspaces.json")
+    if os.path.exists(ts_path):
+        with open(ts_path) as f:
+            target_subspaces = json.load(f)["target_subspaces"]
     else:
-        import torch
-        from peft import PeftModel
-        from utils import load_model, load_model_from_config
-        from model.hook_attention import install_type_rotation_hooks
-        from analysis.extract_hidden_states import load_jsonl
+        target_subspaces = [59, 60, 61, 62, 63]
 
-        # Load config
-        ts_path = os.path.join(args.config_dir, "target_subspaces.json")
-        if os.path.exists(ts_path):
-            with open(ts_path) as f:
-                target_subspaces = json.load(f)["target_subspaces"]
-        else:
-            target_subspaces = [59, 60, 61, 62, 63]
+    exp_path = os.path.join(args.config_dir, "experiment.yaml")
+    if os.path.exists(exp_path):
+        with open(exp_path) as f:
+            rotation_angle = yaml.safe_load(f).get("max_safe_angle", math.pi / 4)
+    else:
+        rotation_angle = math.pi / 4
 
-        exp_path = os.path.join(args.config_dir, "experiment.yaml")
-        if os.path.exists(exp_path):
-            with open(exp_path) as f:
-                rotation_angle = yaml.safe_load(f).get("max_safe_angle", math.pi / 4)
-        else:
-            rotation_angle = math.pi / 4
+    # Load benchmark data
+    bench_path = os.path.join(DATA_DIR, "pi_benchmark.jsonl")
+    if not os.path.exists(bench_path):
+        bench_path = os.path.join(DATA_DIR, "pi_attacks.jsonl")
+    samples = load_jsonl(bench_path, args.num_samples)
+    print(f"Loaded {len(samples)} benchmark samples")
 
-        # Load benchmark data
-        bench_path = os.path.join(DATA_DIR, "pi_benchmark.jsonl")
-        if not os.path.exists(bench_path):
-            bench_path = os.path.join(DATA_DIR, "pi_attacks.jsonl")
-        samples = load_jsonl(bench_path, args.num_samples)
-        print(f"Loaded {len(samples)} benchmark samples")
+    results = {}
 
-        results = {}
+    # Condition 1: Baseline (no LoRA, no rotation)
+    print("\n=== Condition: Baseline ===")
+    print("Loading base model...")
+    if args.config:
+        model, tokenizer, _ = load_model_from_config(args.config)
+    else:
+        model, tokenizer = load_model()
+    results["baseline"] = evaluate_condition(model, tokenizer, samples)
+    print(f"  Strict ASR: {results['baseline']['strict_ASR']:.4f}")
 
-        # Condition 1: Baseline (no LoRA, no rotation)
-        print("\n=== Condition: Baseline ===")
-        print("Loading base model...")
-        if args.config:
-            model, tokenizer, _ = load_model_from_config(args.config)
-        else:
-            model, tokenizer = load_model()
-        results["baseline"] = evaluate_condition(model, tokenizer, samples)
-        print(f"  Strict ASR: {results['baseline']['strict_ASR']:.4f}")
+    # Condition 2: LoRA without rotation
+    print("\n=== Condition: LoRA (no rotation) ===")
+    if os.path.exists(args.adapter_dir):
+        lora_model = PeftModel.from_pretrained(model, args.adapter_dir)
+        lora_model.eval()
+        results["lora_no_rotation"] = evaluate_condition(
+            lora_model, tokenizer, samples)
+        print(f"  Strict ASR: {results['lora_no_rotation']['strict_ASR']:.4f}")
+    else:
+        print(f"  Adapter not found at {args.adapter_dir}, skipping.")
 
-        # Condition 2: LoRA without rotation
-        print("\n=== Condition: LoRA (no rotation) ===")
-        if os.path.exists(args.adapter_dir):
-            lora_model = PeftModel.from_pretrained(model, args.adapter_dir)
-            lora_model.eval()
-            results["lora_no_rotation"] = evaluate_condition(
-                lora_model, tokenizer, samples)
-            print(f"  Strict ASR: {results['lora_no_rotation']['strict_ASR']:.4f}")
-        else:
-            print(f"  Adapter not found at {args.adapter_dir}, skipping.")
+    # Condition 3: LoRA with rotation
+    print("\n=== Condition: LoRA + Rotation ===")
+    if os.path.exists(args.adapter_dir):
+        hooks = install_type_rotation_hooks(
+            lora_model, target_subspaces, rotation_angle)
+        results["lora_with_rotation"] = evaluate_condition(
+            lora_model, tokenizer, samples, hooks=hooks)
+        hooks.remove()
+        print(f"  Strict ASR: {results['lora_with_rotation']['strict_ASR']:.4f}")
 
-        # Condition 3: LoRA with rotation
-        print("\n=== Condition: LoRA + Rotation ===")
-        if os.path.exists(args.adapter_dir):
-            hooks = install_type_rotation_hooks(
-                lora_model, target_subspaces, rotation_angle)
-            results["lora_with_rotation"] = evaluate_condition(
-                lora_model, tokenizer, samples, hooks=hooks)
-            hooks.remove()
-            print(f"  Strict ASR: {results['lora_with_rotation']['strict_ASR']:.4f}")
+        # Condition 4: LoRA with rotation removed (ablation)
+        print("\n=== Condition: LoRA (rotation removed) ===")
+        results["lora_rotation_removed"] = evaluate_condition(
+            lora_model, tokenizer, samples)
+        print(f"  Strict ASR: {results['lora_rotation_removed']['strict_ASR']:.4f}")
 
-            # Condition 4: LoRA with rotation removed (ablation)
-            print("\n=== Condition: LoRA (rotation removed) ===")
-            results["lora_rotation_removed"] = evaluate_condition(
-                lora_model, tokenizer, samples)
-            print(f"  Strict ASR: {results['lora_rotation_removed']['strict_ASR']:.4f}")
+        del lora_model
+    else:
+        print(f"  Adapter not found, skipping conditions 3 & 4.")
 
-            del lora_model
-        else:
-            print(f"  Adapter not found, skipping conditions 3 & 4.")
-
-        del model
+    del model
 
     # Generate figures
     generate_figure10(results, args.output_dir)

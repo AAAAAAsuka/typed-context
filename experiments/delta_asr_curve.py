@@ -16,7 +16,6 @@ Design:
   - Compare with-LoRA vs without-LoRA (pure ICL)
 
 Usage:
-    python experiments/delta_asr_curve.py --synthetic
     python experiments/delta_asr_curve.py --adapter-dir outputs/lora_adapter
 """
 
@@ -92,78 +91,6 @@ def exponential_decay(x, a, b, c):
 def logistic_decay(x, L, k, x0, c):
     """Logistic decay: ASR = L / (1 + exp(k*(x - x0))) + c"""
     return L / (1.0 + np.exp(k * (x - x0))) + c
-
-
-# ---------------------------------------------------------------------------
-# Synthetic mode
-# ---------------------------------------------------------------------------
-
-def run_synthetic_sweep():
-    """Generate synthetic delta-ASR data for 35 configurations.
-
-    Models ASR as a function of theoretical delta:
-      - ASR(delta) = base_asr * exp(-decay_rate * delta) + noise
-      - Different attack categories have different base rates and sensitivities
-      - LoRA model has lower ASR than ICL-only (steeper decay)
-    """
-    np.random.seed(42)
-
-    # Per-category attack difficulty (base ASR and sensitivity)
-    category_params = {
-        "extraction": {"base_asr": 0.40, "decay_rate": 12.0},
-        "override":   {"base_asr": 0.45, "decay_rate": 10.0},
-        "role_play":  {"base_asr": 0.38, "decay_rate": 14.0},
-        "smuggling":  {"base_asr": 0.42, "decay_rate": 11.0},
-    }
-
-    results_lora = []
-    results_icl = []
-
-    for num_sub in NUM_SUBSPACES_LIST:
-        for theta_idx, theta in enumerate(THETA_LIST):
-            delta = compute_theoretical_delta(theta, num_sub)
-
-            # Per-category ASR for LoRA model
-            cat_asrs = {}
-            for cat, params in category_params.items():
-                raw_asr = params["base_asr"] * math.exp(-params["decay_rate"] * delta)
-                # Add small noise for realism
-                noise = np.random.normal(0, 0.01)
-                cat_asrs[cat] = max(0.0, min(1.0, raw_asr + noise))
-
-            overall_asr = np.mean(list(cat_asrs.values()))
-
-            results_lora.append({
-                "num_subspaces": num_sub,
-                "theta": theta,
-                "theta_label": THETA_LABELS[theta_idx],
-                "theoretical_delta": round(delta, 6),
-                "strict_ASR": round(overall_asr, 4),
-                "per_category_ASR": {k: round(v, 4) for k, v in cat_asrs.items()},
-                "mode": "lora",
-            })
-
-            # ICL-only model: higher ASR (weaker defense, shallower decay)
-            cat_asrs_icl = {}
-            for cat, params in category_params.items():
-                icl_decay = params["decay_rate"] * 0.5  # half as effective
-                raw_asr = params["base_asr"] * math.exp(-icl_decay * delta)
-                noise = np.random.normal(0, 0.01)
-                cat_asrs_icl[cat] = max(0.0, min(1.0, raw_asr + noise))
-
-            overall_asr_icl = np.mean(list(cat_asrs_icl.values()))
-
-            results_icl.append({
-                "num_subspaces": num_sub,
-                "theta": theta,
-                "theta_label": THETA_LABELS[theta_idx],
-                "theoretical_delta": round(delta, 6),
-                "strict_ASR": round(overall_asr_icl, 4),
-                "per_category_ASR": {k: round(v, 4) for k, v in cat_asrs_icl.items()},
-                "mode": "icl",
-            })
-
-    return results_lora, results_icl
 
 
 # ---------------------------------------------------------------------------
@@ -556,8 +483,6 @@ def main():
     parser = argparse.ArgumentParser(
         description="Exp B1: delta-ASR curve — certified gap vs empirical ASR"
     )
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Use synthetic results (no GPU needed)")
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
     parser.add_argument("--adapter-dir",
@@ -580,58 +505,53 @@ def main():
     print(f"θ sweep: {THETA_LABELS}")
     print(f"Total configs: {len(NUM_SUBSPACES_LIST) * len(THETA_LIST)}")
 
-    if args.synthetic:
-        print("\n--- Synthetic mode ---")
-        results_lora, results_icl = run_synthetic_sweep()
-    else:
-        print("\n--- Real model mode ---")
-        import torch
-        from peft import PeftModel
-        from utils import load_model
+    import torch
+    from peft import PeftModel
+    from utils import load_model
 
-        # Load base model on GPU 0
+    # Load base model on GPU 0
+    model, tokenizer = load_model(device_map={"": 0})
+
+    # Load PI benchmark
+    pi_path = os.path.join(DATA_DIR, "pi_attacks.jsonl")
+    if not os.path.exists(pi_path):
+        pi_path = os.path.join(DATA_DIR, "pi_benchmark.jsonl")
+    pi_samples = load_jsonl(pi_path, args.max_pi_samples)
+    print(f"Loaded {len(pi_samples)} PI samples")
+
+    # --- LoRA mode ---
+    if os.path.exists(args.adapter_dir):
+        print(f"\nLoading LoRA adapter from {args.adapter_dir}")
+        lora_model = PeftModel.from_pretrained(model, args.adapter_dir)
+        lora_model.eval()
+    else:
+        print(f"Warning: LoRA adapter not found at {args.adapter_dir}, "
+              "using base model for LoRA mode")
+        lora_model = model
+
+    print("\n=== LoRA + Rotation sweep ===")
+    results_lora = run_real_sweep(
+        lora_model, tokenizer, pi_samples, base_subspaces
+    )
+    for r in results_lora:
+        r["mode"] = "lora"
+
+    # --- ICL mode (base model, no LoRA) ---
+    if os.path.exists(args.adapter_dir):
+        # Unload LoRA to get base model back
+        del lora_model
+        torch.cuda.empty_cache()
         model, tokenizer = load_model(device_map={"": 0})
 
-        # Load PI benchmark
-        pi_path = os.path.join(DATA_DIR, "pi_attacks.jsonl")
-        if not os.path.exists(pi_path):
-            pi_path = os.path.join(DATA_DIR, "pi_benchmark.jsonl")
-        pi_samples = load_jsonl(pi_path, args.max_pi_samples)
-        print(f"Loaded {len(pi_samples)} PI samples")
+    print("\n=== ICL-only sweep ===")
+    results_icl = run_real_sweep(
+        model, tokenizer, pi_samples, base_subspaces
+    )
+    for r in results_icl:
+        r["mode"] = "icl"
 
-        # --- LoRA mode ---
-        if os.path.exists(args.adapter_dir):
-            print(f"\nLoading LoRA adapter from {args.adapter_dir}")
-            lora_model = PeftModel.from_pretrained(model, args.adapter_dir)
-            lora_model.eval()
-        else:
-            print(f"Warning: LoRA adapter not found at {args.adapter_dir}, "
-                  "using base model for LoRA mode")
-            lora_model = model
-
-        print("\n=== LoRA + Rotation sweep ===")
-        results_lora = run_real_sweep(
-            lora_model, tokenizer, pi_samples, base_subspaces
-        )
-        for r in results_lora:
-            r["mode"] = "lora"
-
-        # --- ICL mode (base model, no LoRA) ---
-        if os.path.exists(args.adapter_dir):
-            # Unload LoRA to get base model back
-            del lora_model
-            torch.cuda.empty_cache()
-            model, tokenizer = load_model(device_map={"": 0})
-
-        print("\n=== ICL-only sweep ===")
-        results_icl = run_real_sweep(
-            model, tokenizer, pi_samples, base_subspaces
-        )
-        for r in results_icl:
-            r["mode"] = "icl"
-
-        del model
-        torch.cuda.empty_cache()
+    del model
+    torch.cuda.empty_cache()
 
     # -----------------------------------------------------------------------
     # Print results table

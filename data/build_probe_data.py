@@ -422,8 +422,8 @@ def label_pi_samples(pi_samples, model=None, tokenizer=None):
             print("Model loaded successfully.")
         except Exception as e:
             print(f"Cannot load model: {e}")
-            print("Falling back to synthetic labeling for testing.")
-            return _synthetic_label_split(pi_samples)
+            print("Model is required for PI labeling. Use GPU.")
+            sys.exit(1)
 
     device = next(model.parameters()).device
     labeled = []
@@ -474,40 +474,6 @@ def label_pi_samples(pi_samples, model=None, tokenizer=None):
 
     return pi_success, pi_fail
 
-
-def _synthetic_label_split(pi_samples):
-    """
-    Synthetic labeling when model is unavailable.
-    Uses heuristic: extraction attacks with secrets more likely to succeed,
-    role_play attacks more likely to fail, etc.
-    """
-    rng = random.Random(SEED + 100)
-    pi_success = []
-    pi_fail = []
-
-    # Approximate success rates by category
-    success_rates = {
-        "extraction": 0.4,
-        "override": 0.3,
-        "role_play": 0.25,
-        "smuggling": 0.35,
-    }
-
-    for sample in pi_samples:
-        cat = sample.get("attack_category", "extraction")
-        rate = success_rates.get(cat, 0.3)
-        sample["response"] = "[SYNTHETIC - no model inference]"
-        if rng.random() < rate:
-            sample["pi_judgment"] = "success"
-            pi_success.append(sample)
-        else:
-            sample["pi_judgment"] = "fail"
-            pi_fail.append(sample)
-
-    print(f"\nSynthetic PI labeling (no GPU):")
-    print(f"  Success: {len(pi_success)}")
-    print(f"  Fail: {len(pi_fail)}")
-    return pi_success, pi_fail
 
 
 # ---------------------------------------------------------------------------

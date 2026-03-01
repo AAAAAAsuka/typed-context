@@ -18,7 +18,6 @@ For each alpha, evaluates on LoRA model:
 Also computes theoretical attention share bound for each alpha.
 
 Usage:
-    python experiments/trust_hierarchy_sweep.py --synthetic
     python experiments/trust_hierarchy_sweep.py
 """
 
@@ -221,50 +220,6 @@ class CustomAngleHooks:
             rotary.forward = original_forward
         self._original_forwards.clear()
         self._type_ids = None
-
-
-# ---------------------------------------------------------------------------
-# Synthetic mode
-# ---------------------------------------------------------------------------
-
-def run_synthetic_sweep(target_subspaces):
-    """Generate synthetic results for all alpha values.
-
-    Models:
-      - Direct ASR = 0.42 / (1 + 8*(1 - cos(alpha)))  — monotonic decrease
-      - Indirect ASR = 0.35 / (1 + 10*(1 - cos(alpha))) — steeper decrease
-        (external always at pi/2 provides baseline defense)
-      - Benign accuracy = 0.95 - 0.08*(alpha / (pi/2)) — gentle linear decline
-      - Instruction-following = 0.96 - 0.08*(alpha / (pi/2))
-    """
-    results = {}
-    half_pi = math.pi / 2
-
-    for i, alpha in enumerate(ALPHA_VALUES):
-        cos_alpha = math.cos(alpha)
-
-        # ASR modeled as logistic-like decay (guaranteed monotonic decrease)
-        direct_asr = 0.42 / (1.0 + 8.0 * (1.0 - cos_alpha))
-        indirect_asr = 0.35 / (1.0 + 10.0 * (1.0 - cos_alpha))
-
-        # Utility metrics: gentle linear decline
-        benign_acc = 0.95 - 0.08 * (alpha / half_pi)
-        instruct_rate = 0.96 - 0.08 * (alpha / half_pi)
-
-        # Theoretical bound
-        rho_min = compute_theoretical_bound(alpha)
-
-        results[f"alpha_{i}"] = {
-            "alpha": alpha,
-            "alpha_label": ALPHA_LABELS[i],
-            "direct_pi_asr": round(direct_asr, 4),
-            "indirect_pi_asr": round(indirect_asr, 4),
-            "benign_acc": round(benign_acc, 4),
-            "instruction_following_rate": round(instruct_rate, 4),
-            "theoretical_rho_min": round(rho_min, 4),
-        }
-
-    return results
 
 
 # ---------------------------------------------------------------------------
@@ -481,8 +436,6 @@ def main():
     parser = argparse.ArgumentParser(
         description="Exp A2: Trust hierarchy sweep — vary user alpha"
     )
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Use synthetic results (no GPU needed)")
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
     parser.add_argument("--config", default=None,
@@ -508,97 +461,92 @@ def main():
     print(f"External theta: {EXTERNAL_THETA}")
     print(f"Alpha sweep: {ALPHA_LABELS}")
 
-    if args.synthetic:
-        print("\n--- Synthetic mode ---")
-        results = run_synthetic_sweep(target_subspaces)
+    from peft import PeftModel
+    from utils import load_model, load_model_from_config
+
+    # Load model on GPU 0 only
+    if args.config:
+        model, tokenizer, _ = load_model_from_config(
+            args.config, device_map={"": 0}
+        )
     else:
-        print("\n--- Real model mode ---")
-        from peft import PeftModel
-        from utils import load_model, load_model_from_config
+        model, tokenizer = load_model(device_map={"": 0})
 
-        # Load model on GPU 0 only
-        if args.config:
-            model, tokenizer, _ = load_model_from_config(
-                args.config, device_map={"": 0}
+    # Load LoRA adapter if available
+    if os.path.exists(args.adapter_dir):
+        print(f"Loading LoRA adapter from {args.adapter_dir}")
+        model = PeftModel.from_pretrained(model, args.adapter_dir)
+        model.eval()
+    else:
+        print(f"Warning: LoRA adapter not found at {args.adapter_dir}, "
+              "using base model")
+
+    # Load datasets
+    pi_path = os.path.join(DATA_DIR, "pi_attacks.jsonl")
+    if not os.path.exists(pi_path):
+        pi_path = os.path.join(DATA_DIR, "pi_benchmark.jsonl")
+    pi_samples = load_jsonl(pi_path, args.max_pi_samples)
+    print(f"Loaded {len(pi_samples)} direct PI samples")
+
+    indirect_path = os.path.join(DATA_DIR, "indirect_pi.jsonl")
+    indirect_samples = None
+    if os.path.exists(indirect_path):
+        indirect_samples = load_jsonl(indirect_path, args.max_pi_samples)
+        print(f"Loaded {len(indirect_samples)} indirect PI samples")
+    else:
+        print("Indirect PI dataset not found, will estimate from direct PI")
+
+    normal_path = os.path.join(DATA_DIR, "normal.jsonl")
+    normal_samples = load_jsonl(normal_path, args.max_benign_samples)
+    print(f"Loaded {len(normal_samples)} benign samples")
+
+    results = {}
+    for i, alpha in enumerate(ALPHA_VALUES):
+        print(f"\n{'='*50}")
+        print(f"Alpha = {ALPHA_LABELS[i]} ({alpha:.4f} rad)")
+        print(f"{'='*50}")
+
+        # Direct PI
+        direct_asr = evaluate_direct_pi(
+            model, tokenizer, pi_samples, target_subspaces, alpha
+        )
+
+        # Indirect PI
+        if indirect_samples is not None:
+            indirect_asr = evaluate_indirect_pi(
+                model, tokenizer, indirect_samples, target_subspaces, alpha
             )
         else:
-            model, tokenizer = load_model(device_map={"": 0})
+            # Estimate: indirect PI is generally harder than direct PI
+            indirect_asr = direct_asr * 0.8
 
-        # Load LoRA adapter if available
-        if os.path.exists(args.adapter_dir):
-            print(f"Loading LoRA adapter from {args.adapter_dir}")
-            model = PeftModel.from_pretrained(model, args.adapter_dir)
-            model.eval()
-        else:
-            print(f"Warning: LoRA adapter not found at {args.adapter_dir}, "
-                  "using base model")
+        # Benign accuracy
+        benign_acc, instruct_rate = evaluate_benign(
+            model, tokenizer, normal_samples, target_subspaces, alpha,
+            max_samples=args.max_benign_samples,
+        )
 
-        # Load datasets
-        pi_path = os.path.join(DATA_DIR, "pi_attacks.jsonl")
-        if not os.path.exists(pi_path):
-            pi_path = os.path.join(DATA_DIR, "pi_benchmark.jsonl")
-        pi_samples = load_jsonl(pi_path, args.max_pi_samples)
-        print(f"Loaded {len(pi_samples)} direct PI samples")
+        # Theoretical bound
+        rho_min = compute_theoretical_bound(alpha)
 
-        indirect_path = os.path.join(DATA_DIR, "indirect_pi.jsonl")
-        indirect_samples = None
-        if os.path.exists(indirect_path):
-            indirect_samples = load_jsonl(indirect_path, args.max_pi_samples)
-            print(f"Loaded {len(indirect_samples)} indirect PI samples")
-        else:
-            print("Indirect PI dataset not found, will estimate from direct PI")
+        results[f"alpha_{i}"] = {
+            "alpha": alpha,
+            "alpha_label": ALPHA_LABELS[i],
+            "direct_pi_asr": round(direct_asr, 4),
+            "indirect_pi_asr": round(indirect_asr, 4),
+            "benign_acc": round(benign_acc, 4),
+            "instruction_following_rate": round(instruct_rate, 4),
+            "theoretical_rho_min": round(rho_min, 4),
+        }
 
-        normal_path = os.path.join(DATA_DIR, "normal.jsonl")
-        normal_samples = load_jsonl(normal_path, args.max_benign_samples)
-        print(f"Loaded {len(normal_samples)} benign samples")
+        print(f"  Direct PI ASR:      {direct_asr:.4f}")
+        print(f"  Indirect PI ASR:    {indirect_asr:.4f}")
+        print(f"  Benign accuracy:    {benign_acc:.4f}")
+        print(f"  Instruct-follow:    {instruct_rate:.4f}")
+        print(f"  Theoretical ρ_min:  {rho_min:.4f}")
 
-        results = {}
-        for i, alpha in enumerate(ALPHA_VALUES):
-            print(f"\n{'='*50}")
-            print(f"Alpha = {ALPHA_LABELS[i]} ({alpha:.4f} rad)")
-            print(f"{'='*50}")
-
-            # Direct PI
-            direct_asr = evaluate_direct_pi(
-                model, tokenizer, pi_samples, target_subspaces, alpha
-            )
-
-            # Indirect PI
-            if indirect_samples is not None:
-                indirect_asr = evaluate_indirect_pi(
-                    model, tokenizer, indirect_samples, target_subspaces, alpha
-                )
-            else:
-                # Estimate: indirect PI is generally harder than direct PI
-                indirect_asr = direct_asr * 0.8
-
-            # Benign accuracy
-            benign_acc, instruct_rate = evaluate_benign(
-                model, tokenizer, normal_samples, target_subspaces, alpha,
-                max_samples=args.max_benign_samples,
-            )
-
-            # Theoretical bound
-            rho_min = compute_theoretical_bound(alpha)
-
-            results[f"alpha_{i}"] = {
-                "alpha": alpha,
-                "alpha_label": ALPHA_LABELS[i],
-                "direct_pi_asr": round(direct_asr, 4),
-                "indirect_pi_asr": round(indirect_asr, 4),
-                "benign_acc": round(benign_acc, 4),
-                "instruction_following_rate": round(instruct_rate, 4),
-                "theoretical_rho_min": round(rho_min, 4),
-            }
-
-            print(f"  Direct PI ASR:      {direct_asr:.4f}")
-            print(f"  Indirect PI ASR:    {indirect_asr:.4f}")
-            print(f"  Benign accuracy:    {benign_acc:.4f}")
-            print(f"  Instruct-follow:    {instruct_rate:.4f}")
-            print(f"  Theoretical ρ_min:  {rho_min:.4f}")
-
-        del model
-        torch.cuda.empty_cache()
+    del model
+    torch.cuda.empty_cache()
 
     # Print results table
     print("\n" + "=" * 90)

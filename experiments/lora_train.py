@@ -6,7 +6,6 @@ teaching the model to use type signals for PI defense.
 
 Usage:
     python experiments/lora_train.py                    # full training (needs GPU)
-    python experiments/lora_train.py --synthetic        # synthetic (verify setup)
     python experiments/lora_train.py --max-samples 100  # quick test
 """
 
@@ -156,7 +155,6 @@ def train_lora(model, tokenizer, train_data, target_subspaces, rotation_angle,
 
 def main():
     parser = argparse.ArgumentParser(description="LoRA training with typed RoPE")
-    parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--max-samples", type=int, default=None)
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--lr", type=float, default=2e-5)
@@ -181,34 +179,25 @@ def main():
     else:
         rotation_angle = math.pi / 4
 
-    if args.synthetic:
-        # Synthetic: just verify data preparation works
-        print("Synthetic mode: verifying training pipeline setup...")
-        loss_history = [2.5, 1.8, 1.4]
-        os.makedirs(args.output_dir, exist_ok=True)
-        with open(os.path.join(args.output_dir, "training_log.json"), "w") as f:
-            json.dump({"loss_history": loss_history, "epochs": 3, "lr": 2e-5}, f)
-        print(f"Synthetic training log saved to {args.output_dir}")
+    from utils import load_model, load_model_from_config
+    if args.config:
+        model, tokenizer, _ = load_model_from_config(args.config)
     else:
-        from utils import load_model, load_model_from_config
-        if args.config:
-            model, tokenizer, _ = load_model_from_config(args.config)
-        else:
-            model, tokenizer = load_model()
+        model, tokenizer = load_model()
 
-        data_path = os.path.join(DATA_DIR, "training_data.jsonl")
-        if not os.path.exists(data_path):
-            print("Training data not found. Run data/build_training_data.py first.")
-            sys.exit(1)
+    data_path = os.path.join(DATA_DIR, "training_data.jsonl")
+    if not os.path.exists(data_path):
+        print("Training data not found. Run data/build_training_data.py first.")
+        sys.exit(1)
 
-        print("Preparing training data...")
-        train_data = prepare_training_data(tokenizer, data_path, args.max_samples)
-        print(f"Prepared {len(train_data)} training samples")
+    print("Preparing training data...")
+    train_data = prepare_training_data(tokenizer, data_path, args.max_samples)
+    print(f"Prepared {len(train_data)} training samples")
 
-        loss_history = train_lora(
-            model, tokenizer, train_data, target_subspaces, rotation_angle,
-            epochs=args.epochs, lr=args.lr, output_dir=args.output_dir
-        )
+    loss_history = train_lora(
+        model, tokenizer, train_data, target_subspaces, rotation_angle,
+        epochs=args.epochs, lr=args.lr, output_dir=args.output_dir
+    )
 
     # Verification
     print("\n=== Verification ===")
@@ -229,8 +218,6 @@ def main():
         path = os.path.join(args.output_dir, fname)
         if os.path.exists(path):
             print(f"  OK: {fname}")
-        elif args.synthetic:
-            print(f"  SKIP (synthetic): {fname}")
         else:
             print(f"  MISSING: {fname}")
 

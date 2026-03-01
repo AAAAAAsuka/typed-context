@@ -6,7 +6,6 @@ by measuring attention gap and type category capacity at each precision.
 
 Usage:
     python experiments/quantization_check.py                # full check (needs GPU)
-    python experiments/quantization_check.py --synthetic    # synthetic results
 """
 
 import argparse
@@ -113,32 +112,6 @@ def test_type_capacity(model, tokenizer, sample, target_subspaces, rotation_angl
     return max_distinguishable
 
 
-def run_synthetic_check():
-    """Synthetic results based on expected quantization behavior."""
-    results = {}
-    for precision in PRECISIONS:
-        results[precision] = {}
-        for angle in ROTATION_ANGLES:
-            if precision == "fp16":
-                gap = 0.015 * angle  # scales with angle
-                capacity = 8
-            elif precision == "int8":
-                gap = 0.012 * angle  # slightly reduced
-                capacity = 6
-            else:  # int4
-                gap = 0.008 * angle  # more reduced
-                capacity = 4
-
-            results[precision][f"{angle:.4f}"] = {
-                "angle": angle,
-                "mean_gap": gap,
-                "std_gap": gap * 0.2,
-                "type_capacity": capacity,
-            }
-
-    return results
-
-
 def generate_figure9(results, output_dir=OUTPUT_DIR):
     """Generate quantization survival heatmap."""
     os.makedirs(output_dir, exist_ok=True)
@@ -183,7 +156,6 @@ def generate_figure9(results, output_dir=OUTPUT_DIR):
 
 def main():
     parser = argparse.ArgumentParser(description="Quantization robustness check")
-    parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--num-samples", type=int, default=10)
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
@@ -191,61 +163,58 @@ def main():
                         help="Model config YAML (e.g. configs/qwen3_8b.yaml)")
     args = parser.parse_args()
 
-    if args.synthetic:
-        results = run_synthetic_check()
+    # Load config
+    ts_path = os.path.join(args.config_dir, "target_subspaces.json")
+    if os.path.exists(ts_path):
+        with open(ts_path) as f:
+            target_subspaces = json.load(f)["target_subspaces"]
     else:
-        # Load config
-        ts_path = os.path.join(args.config_dir, "target_subspaces.json")
-        if os.path.exists(ts_path):
-            with open(ts_path) as f:
-                target_subspaces = json.load(f)["target_subspaces"]
-        else:
-            target_subspaces = [59, 60, 61, 62, 63]
+        target_subspaces = [59, 60, 61, 62, 63]
 
-        from utils import load_model, load_model_from_config
-        from analysis.extract_hidden_states import load_jsonl
-        samples = load_jsonl(os.path.join(PROJECT_ROOT, "data", "normal.jsonl"),
-                             args.num_samples)
+    from utils import load_model, load_model_from_config
+    from analysis.extract_hidden_states import load_jsonl
+    samples = load_jsonl(os.path.join(PROJECT_ROOT, "data", "normal.jsonl"),
+                         args.num_samples)
 
-        # Detect base precision for FP8 models
-        precisions_to_test = list(PRECISIONS)
-        if args.config:
-            from utils import load_config
-            cfg = load_config(args.config)
-            if "fp8" in cfg.get("model_name", "").lower():
-                precisions_to_test = ["fp8", "int8", "int4"]
+    # Detect base precision for FP8 models
+    precisions_to_test = list(PRECISIONS)
+    if args.config:
+        from utils import load_config
+        cfg = load_config(args.config)
+        if "fp8" in cfg.get("model_name", "").lower():
+            precisions_to_test = ["fp8", "int8", "int4"]
 
-        results = {}
-        for precision in precisions_to_test:
-            print(f"\nLoading model at {precision}...")
-            try:
-                if args.config:
-                    model, tokenizer, _ = load_model_from_config(
-                        args.config, precision=precision,
-                        attn_implementation="eager")
-                else:
-                    model, tokenizer = load_model(precision=precision,
-                                                  attn_implementation="eager")
-            except Exception as e:
-                print(f"  Failed to load at {precision}: {e}")
-                print(f"  Skipping this precision level.")
-                continue
-            results[precision] = {}
+    results = {}
+    for precision in precisions_to_test:
+        print(f"\nLoading model at {precision}...")
+        try:
+            if args.config:
+                model, tokenizer, _ = load_model_from_config(
+                    args.config, precision=precision,
+                    attn_implementation="eager")
+            else:
+                model, tokenizer = load_model(precision=precision,
+                                              attn_implementation="eager")
+        except Exception as e:
+            print(f"  Failed to load at {precision}: {e}")
+            print(f"  Skipping this precision level.")
+            continue
+        results[precision] = {}
 
-            for angle in ROTATION_ANGLES:
-                mean_gap, std_gap = measure_attention_gap_at_precision(
-                    model, tokenizer, samples, target_subspaces, angle
-                )
-                capacity = test_type_capacity(
-                    model, tokenizer, samples[0], target_subspaces, angle
-                )
-                results[precision][f"{angle:.4f}"] = {
-                    "angle": angle, "mean_gap": mean_gap, "std_gap": std_gap,
-                    "type_capacity": capacity,
-                }
-                print(f"  angle={angle:.4f}: gap={mean_gap:.6f}, capacity={capacity}")
+        for angle in ROTATION_ANGLES:
+            mean_gap, std_gap = measure_attention_gap_at_precision(
+                model, tokenizer, samples, target_subspaces, angle
+            )
+            capacity = test_type_capacity(
+                model, tokenizer, samples[0], target_subspaces, angle
+            )
+            results[precision][f"{angle:.4f}"] = {
+                "angle": angle, "mean_gap": mean_gap, "std_gap": std_gap,
+                "type_capacity": capacity,
+            }
+            print(f"  angle={angle:.4f}: gap={mean_gap:.6f}, capacity={capacity}")
 
-            del model, tokenizer
+        del model, tokenizer
 
     # Generate Figure 9
     generate_figure9(results, args.output_dir)

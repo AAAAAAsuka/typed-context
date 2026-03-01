@@ -7,14 +7,10 @@ are modulated by cos(theta_A - theta_B) and this modulation is content-independe
 Hypothesis: The attention score in target subspaces between tokens of type A and
 type B is precisely modulated by cos(theta_A - theta_B), regardless of input content.
 
-Two analysis modes:
-  --synthetic: Directly computes QK^T dot products using typed_rope primitives.
-               Validates the mathematical property without a model.
-  (default):   Extracts post-softmax attention from the real model and normalizes
-               to recover the modulation pattern.
+Extracts post-softmax attention from the real model and normalizes
+to recover the modulation pattern.
 
 Usage:
-    python experiments/certified_attention.py --synthetic
     python experiments/certified_attention.py
 """
 
@@ -62,117 +58,6 @@ def compute_pearson_correlation(measured, theoretical):
     if np.std(m) < 1e-12 or np.std(t) < 1e-12:
         return float("nan")
     return float(np.corrcoef(m, t)[0, 1])
-
-
-# ---------------------------------------------------------------------------
-# Synthetic mode: Direct QK^T dot product analysis using typed_rope primitives
-# ---------------------------------------------------------------------------
-
-def synthetic_dot_product_analysis(target_subspaces, rotation_angle, head_dim=128,
-                                    n_samples=100, n_vectors_per_sample=500,
-                                    n_layers=32):
-    """Verify cos(theta_A - theta_B) modulation via direct QK^T computation.
-
-    Key approach: use the SAME random Q and K vectors for all type pair
-    comparisons. Only the type rotation differs. This way the content-dependent
-    part is identical across pairs, and the ratio isolates the rotation factor.
-
-    For each sample:
-      1. Generate shared random Q and K vectors
-      2. For each (type_A, type_B), apply respective rotations
-      3. Compute dot product restricted to target subspace dims
-      4. Ratio = dot(A,B) / dot(A,A) should approximate cos(theta_A - theta_B)
-
-    Returns:
-        stats: dict with "qt_kt" -> {"mean": ..., "var": ..., "per_layer": ...}
-    """
-    from model.typed_rope import create_type_rotation, _rotate_half
-
-    rng = np.random.RandomState(42)
-    half = head_dim // 2
-
-    # Identify target subspace dimension indices (half-half convention)
-    target_dims = []
-    for s in target_subspaces:
-        target_dims.extend([s, s + half])
-
-    # Precompute type cos/sin for each type
-    type_cos_sin = {}
-    for t in range(3):
-        cos_t, sin_t = create_type_rotation(head_dim, t, target_subspaces, rotation_angle)
-        type_cos_sin[t] = (
-            cos_t.view(1, 1, 1, head_dim),
-            sin_t.view(1, 1, 1, head_dim),
-        )
-
-    # Collect ratios per (qt, kt) pair, per layer
-    pair_ratios = {f"{qt}_{kt}": [] for qt in range(3) for kt in range(3)}
-    pair_ratios_per_layer = {f"{qt}_{kt}": {} for qt in range(3) for kt in range(3)}
-
-    for sample_idx in range(n_samples):
-        for layer_idx in range(n_layers):
-            # Generate SHARED random Q and K vectors with positive correlation
-            # (in real models Q and K come from projecting the same hidden states,
-            # so they have significant correlation and positive expected dot product)
-            N = n_vectors_per_sample
-            base = torch.tensor(rng.randn(1, 1, N, head_dim), dtype=torch.float32)
-            noise_q = torch.tensor(rng.randn(1, 1, N, head_dim), dtype=torch.float32) * 0.3
-            noise_k = torch.tensor(rng.randn(1, 1, N, head_dim), dtype=torch.float32) * 0.3
-            q_raw = base + noise_q
-            k_raw = base + noise_k
-            q_half = _rotate_half(q_raw)
-            k_half = _rotate_half(k_raw)
-
-            # Compute rotated Q and K for each type (cache)
-            rotated_q = {}
-            rotated_k = {}
-            for t in range(3):
-                cos_t, sin_t = type_cos_sin[t]
-                rotated_q[t] = q_raw * cos_t + q_half * sin_t
-                rotated_k[t] = k_raw * cos_t + k_half * sin_t
-
-            # For each type pair, compute dot product in target subspace dims
-            dot_products = {}
-            for qt in range(3):
-                for kt in range(3):
-                    q_target = rotated_q[qt][..., target_dims]
-                    k_target = rotated_k[kt][..., target_dims]
-                    dots = (q_target * k_target).sum(dim=-1)  # (1, 1, N)
-                    dot_products[f"{qt}_{kt}"] = dots.mean().item()
-
-            # Compute ratios relative to same-type
-            for qt in range(3):
-                same_dot = dot_products[f"{qt}_{qt}"]
-                for kt in range(3):
-                    key = f"{qt}_{kt}"
-                    if abs(same_dot) > 1e-10:
-                        ratio = dot_products[key] / same_dot
-                    else:
-                        ratio = 1.0
-                    pair_ratios[key].append(ratio)
-
-                    if layer_idx not in pair_ratios_per_layer[key]:
-                        pair_ratios_per_layer[key][layer_idx] = []
-                    pair_ratios_per_layer[key][layer_idx].append(ratio)
-
-        if (sample_idx + 1) % 20 == 0:
-            print(f"  Processed {sample_idx + 1}/{n_samples} samples")
-
-    # Aggregate statistics
-    stats = {}
-    for key in pair_ratios:
-        vals = pair_ratios[key]
-        per_layer = {}
-        for l, lvals in pair_ratios_per_layer[key].items():
-            per_layer[l] = {"mean": float(np.mean(lvals)), "var": float(np.var(lvals))}
-        stats[key] = {
-            "mean": float(np.mean(vals)),
-            "var": float(np.var(vals)),
-            "n_samples": len(vals),
-            "per_layer": per_layer,
-        }
-
-    return stats
 
 
 # ---------------------------------------------------------------------------
@@ -457,8 +342,6 @@ def generate_certified_attention_figure(stats, theoretical, layer_corrs, output_
 
 def main():
     parser = argparse.ArgumentParser(description="Exp A1: Certified attention verification")
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Use synthetic QK^T analysis (no GPU needed)")
     parser.add_argument("--num-samples", type=int, default=100)
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
@@ -511,34 +394,26 @@ def main():
             print(f"  ({type_names[qt]} -> {type_names[kt]}): {theoretical[key]:.6f}")
 
     # Run analysis
-    if args.synthetic:
-        print("\n--- Synthetic mode: Direct QK^T dot product analysis ---")
-        stats = synthetic_dot_product_analysis(
-            target_subspaces, rotation_angle, head_dim,
-            n_samples=args.num_samples, n_vectors_per_sample=200,
-            n_layers=n_layers,
-        )
+    print("\n--- Extracting attention weights ---")
+    from utils import load_model, load_model_from_config
+
+    if args.config:
+        model, tokenizer, _ = load_model_from_config(
+            args.config, attn_implementation="eager")
     else:
-        print("\n--- Real model mode: Extracting attention weights ---")
-        from utils import load_model, load_model_from_config
-
-        if args.config:
-            model, tokenizer, _ = load_model_from_config(
-                args.config, attn_implementation="eager")
-        else:
-            model, tokenizer = load_model(
-                attn_implementation="eager",
-                device_map={"": 0},
-            )
-            n_layers = model.config.num_hidden_layers
-
-        samples = build_diverse_inputs(args.num_samples)
-        print(f"Extracting attention from {len(samples)} samples...")
-        stats = extract_and_analyze_model_attention(
-            model, tokenizer, samples, target_subspaces, rotation_angle
+        model, tokenizer = load_model(
+            attn_implementation="eager",
+            device_map={"": 0},
         )
-        del model
-        torch.cuda.empty_cache()
+        n_layers = model.config.num_hidden_layers
+
+    samples = build_diverse_inputs(args.num_samples)
+    print(f"Extracting attention from {len(samples)} samples...")
+    stats = extract_and_analyze_model_attention(
+        model, tokenizer, samples, target_subspaces, rotation_angle
+    )
+    del model
+    torch.cuda.empty_cache()
 
     # Print measured statistics
     print("\nMeasured modulation ratios per (query_type, key_type):")
@@ -577,7 +452,6 @@ def main():
             "rotation_angle": rotation_angle,
             "head_dim": head_dim,
             "num_samples": args.num_samples,
-            "synthetic": args.synthetic,
         },
         "theoretical_predictions": {k: float(v) for k, v in theoretical.items()},
         "measured_stats": {

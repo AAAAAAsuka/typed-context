@@ -12,7 +12,6 @@ Usage:
     python experiments/icl_experiment.py --conditions A B        # delimiter baseline
     python experiments/icl_experiment.py --conditions C D E      # rotation conditions
     python experiments/icl_experiment.py --all                   # all conditions
-    python experiments/icl_experiment.py --synthetic             # synthetic results
 """
 
 import argparse
@@ -347,22 +346,6 @@ def run_condition_e(model, tokenizer, samples, target_subspaces, rotation_angle)
     return compute_metrics(judgments)
 
 
-def run_synthetic_conditions():
-    """Synthetic results based on expected outcomes."""
-    return {
-        "A": {"strict_ASR": 0.42, "soft_ASR": 0.55, "benign_acc": 0.95,
-               "degradation": 0.0, "total": 200},
-        "B": {"strict_ASR": 0.30, "soft_ASR": 0.42, "benign_acc": 0.92,
-               "degradation": 0.01, "total": 200},
-        "C": {"strict_ASR": 0.38, "soft_ASR": 0.50, "benign_acc": 0.93,
-               "degradation": 0.02, "total": 200},
-        "D": {"strict_ASR": 0.25, "soft_ASR": 0.37, "benign_acc": 0.91,
-               "degradation": 0.02, "total": 200},
-        "E": {"strict_ASR": 0.40, "soft_ASR": 0.53, "benign_acc": 0.90,
-               "degradation": 0.03, "total": 200},
-    }
-
-
 # ---------------------------------------------------------------------------
 # Figure 8: Grouped bar chart
 # ---------------------------------------------------------------------------
@@ -423,7 +406,6 @@ def main():
     parser.add_argument("--conditions", nargs="+", default=["A", "B"],
                         choices=["A", "B", "C", "D", "E"])
     parser.add_argument("--all", action="store_true", help="Run all conditions")
-    parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
     parser.add_argument("--config", default=None,
@@ -441,55 +423,52 @@ def main():
     else:
         results = {}
 
-    if args.synthetic:
-        results = run_synthetic_conditions()
+    # Load config
+    ts_path = os.path.join(args.config_dir, "target_subspaces.json")
+    if os.path.exists(ts_path):
+        with open(ts_path) as f:
+            target_subspaces = json.load(f)["target_subspaces"]
     else:
-        # Load config
-        ts_path = os.path.join(args.config_dir, "target_subspaces.json")
-        if os.path.exists(ts_path):
-            with open(ts_path) as f:
-                target_subspaces = json.load(f)["target_subspaces"]
-        else:
-            target_subspaces = [59, 60, 61, 62, 63]
+        target_subspaces = [59, 60, 61, 62, 63]
 
-        exp_path = os.path.join(args.config_dir, "experiment.yaml")
-        if os.path.exists(exp_path):
-            with open(exp_path) as f:
-                rotation_angle = yaml.safe_load(f).get("max_safe_angle", math.pi / 4)
-        else:
-            rotation_angle = math.pi / 4
+    exp_path = os.path.join(args.config_dir, "experiment.yaml")
+    if os.path.exists(exp_path):
+        with open(exp_path) as f:
+            rotation_angle = yaml.safe_load(f).get("max_safe_angle", math.pi / 4)
+    else:
+        rotation_angle = math.pi / 4
 
-        # Load benchmark data
-        bench_path = os.path.join(DATA_DIR, "pi_benchmark.jsonl")
-        if not os.path.exists(bench_path):
-            bench_path = os.path.join(DATA_DIR, "pi_attacks.jsonl")
-        from analysis.extract_hidden_states import load_jsonl
-        samples = load_jsonl(bench_path)
-        print(f"Loaded {len(samples)} benchmark samples")
+    # Load benchmark data
+    bench_path = os.path.join(DATA_DIR, "pi_benchmark.jsonl")
+    if not os.path.exists(bench_path):
+        bench_path = os.path.join(DATA_DIR, "pi_attacks.jsonl")
+    from analysis.extract_hidden_states import load_jsonl
+    samples = load_jsonl(bench_path)
+    print(f"Loaded {len(samples)} benchmark samples")
 
-        from utils import load_model, load_model_from_config
-        if args.config:
-            model, tokenizer, _ = load_model_from_config(args.config)
-        else:
-            model, tokenizer = load_model()
+    from utils import load_model, load_model_from_config
+    if args.config:
+        model, tokenizer, _ = load_model_from_config(args.config)
+    else:
+        model, tokenizer = load_model()
 
-        condition_runners = {
-            "A": lambda: run_condition_a(model, tokenizer, samples),
-            "B": lambda: run_condition_b(model, tokenizer, samples),
-            "C": lambda: run_condition_c(model, tokenizer, samples,
-                                          target_subspaces, rotation_angle),
-            "D": lambda: run_condition_d(model, tokenizer, samples,
-                                          target_subspaces, rotation_angle),
-            "E": lambda: run_condition_e(model, tokenizer, samples,
-                                          target_subspaces, rotation_angle),
-        }
+    condition_runners = {
+        "A": lambda: run_condition_a(model, tokenizer, samples),
+        "B": lambda: run_condition_b(model, tokenizer, samples),
+        "C": lambda: run_condition_c(model, tokenizer, samples,
+                                      target_subspaces, rotation_angle),
+        "D": lambda: run_condition_d(model, tokenizer, samples,
+                                      target_subspaces, rotation_angle),
+        "E": lambda: run_condition_e(model, tokenizer, samples,
+                                      target_subspaces, rotation_angle),
+    }
 
-        for cond in args.conditions:
-            if cond in condition_runners:
-                print(f"\nRunning Condition {cond}...")
-                results[cond] = condition_runners[cond]()
-                print(f"  Strict ASR: {results[cond]['strict_ASR']:.4f}")
-                print(f"  Soft ASR: {results[cond]['soft_ASR']:.4f}")
+    for cond in args.conditions:
+        if cond in condition_runners:
+            print(f"\nRunning Condition {cond}...")
+            results[cond] = condition_runners[cond]()
+            print(f"  Strict ASR: {results[cond]['strict_ASR']:.4f}")
+            print(f"  Soft ASR: {results[cond]['soft_ASR']:.4f}")
 
     # Save results
     os.makedirs(args.output_dir, exist_ok=True)

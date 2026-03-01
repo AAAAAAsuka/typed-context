@@ -7,7 +7,6 @@ and generates attention heatmaps.
 
 Usage:
     python experiments/attention_analysis.py                # full analysis (needs GPU)
-    python experiments/attention_analysis.py --synthetic    # synthetic results
 """
 
 import argparse
@@ -117,30 +116,6 @@ def compute_attention_gap(attn_data):
     return np.mean(all_gaps, axis=0)  # (L, H)
 
 
-def generate_synthetic_attention_data(num_samples=10, num_layers=32,
-                                       num_heads=32, seq_len=50):
-    """Generate synthetic attention data for testing."""
-    rng = np.random.RandomState(42)
-    data = []
-    for i in range(num_samples):
-        # Random attention weights (softmax-like)
-        raw = rng.exponential(1, (num_layers, num_heads, seq_len, seq_len))
-        attn = raw / raw.sum(axis=-1, keepdims=True)
-
-        # Type IDs: first 60% system, rest user
-        type_ids = np.zeros(seq_len, dtype=np.int64)
-        type_ids[int(seq_len * 0.6):] = 1
-
-        tokens = [f"tok_{j}" for j in range(seq_len)]
-
-        data.append({
-            "attn_weights": attn.astype(np.float32),
-            "type_ids": type_ids,
-            "tokens": tokens,
-        })
-    return data
-
-
 def generate_figure7(attn_data_no_rot, attn_data_with_rot, gap_no_rot, gap_with_rot,
                      output_dir=OUTPUT_DIR):
     """Generate 2x2 attention heatmap grid.
@@ -208,7 +183,6 @@ def generate_figure7(attn_data_no_rot, attn_data_with_rot, gap_no_rot, gap_with_
 
 def main():
     parser = argparse.ArgumentParser(description="Attention pattern analysis")
-    parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--num-samples", type=int, default=10)
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
@@ -231,42 +205,25 @@ def main():
     else:
         rotation_angle = math.pi / 4
 
-    if args.synthetic:
-        print("Generating synthetic attention data...")
-        attn_no_rot = generate_synthetic_attention_data(args.num_samples)
-
-        # Simulate rotation effect: slightly bias same-type attention
-        attn_with_rot = generate_synthetic_attention_data(args.num_samples)
-        for data in attn_with_rot:
-            type_ids = data["type_ids"]
-            attn = data["attn_weights"]
-            seq_len = len(type_ids)
-            same_mask = (type_ids[np.newaxis, :] == type_ids[:, np.newaxis]).astype(np.float32)
-            # Boost same-type attention slightly
-            for l in range(attn.shape[0]):
-                for h in range(attn.shape[1]):
-                    attn[l, h] *= (1 + 0.1 * same_mask)
-                    attn[l, h] /= attn[l, h].sum(axis=-1, keepdims=True)
+    from utils import load_model, load_model_from_config
+    from analysis.extract_hidden_states import load_jsonl
+    if args.config:
+        model, tokenizer, _ = load_model_from_config(
+            args.config, attn_implementation="eager")
     else:
-        from utils import load_model, load_model_from_config
-        from analysis.extract_hidden_states import load_jsonl
-        if args.config:
-            model, tokenizer, _ = load_model_from_config(
-                args.config, attn_implementation="eager")
-        else:
-            model, tokenizer = load_model(attn_implementation="eager")
-        samples = load_jsonl(os.path.join(DATA_DIR, "normal.jsonl"), args.num_samples)
+        model, tokenizer = load_model(attn_implementation="eager")
+    samples = load_jsonl(os.path.join(DATA_DIR, "normal.jsonl"), args.num_samples)
 
-        print("Computing attention without rotation...")
-        attn_no_rot = compute_attention_with_rotation(
-            model, tokenizer, samples, target_subspaces, rotation_angle,
-            use_rotation=False
-        )
-        print("Computing attention with rotation...")
-        attn_with_rot = compute_attention_with_rotation(
-            model, tokenizer, samples, target_subspaces, rotation_angle,
-            use_rotation=True
-        )
+    print("Computing attention without rotation...")
+    attn_no_rot = compute_attention_with_rotation(
+        model, tokenizer, samples, target_subspaces, rotation_angle,
+        use_rotation=False
+    )
+    print("Computing attention with rotation...")
+    attn_with_rot = compute_attention_with_rotation(
+        model, tokenizer, samples, target_subspaces, rotation_angle,
+        use_rotation=True
+    )
 
     # Compute attention gaps
     gap_no_rot = compute_attention_gap(attn_no_rot)

@@ -6,7 +6,6 @@ typed RoPE causes acceptable perplexity increase (< 5%).
 
 Usage:
     python experiments/ppl_sweep.py                    # full sweep (needs GPU)
-    python experiments/ppl_sweep.py --synthetic        # synthetic results
 """
 
 import argparse
@@ -116,39 +115,6 @@ def run_ppl_sweep(model, tokenizer, eval_texts, target_subspaces):
     return results
 
 
-def run_synthetic_sweep(target_subspaces):
-    """Synthetic sweep results based on expected behavior."""
-    baseline_ppl = 6.5
-
-    # Simulated: PPL increases with angle and num_subspaces
-    angle_sweep = {}
-    for angle in ROTATION_ANGLES:
-        # PPL increase roughly proportional to angle^2 * num_subspaces
-        n_sub = len(target_subspaces)
-        delta = 0.001 * (angle ** 1.5) * n_sub
-        ppl = baseline_ppl * (1 + delta)
-        angle_sweep[f"{angle:.4f}"] = {
-            "angle": angle, "mean_ppl": ppl, "std_ppl": 0.5 + delta * 2,
-            "relative_change": delta
-        }
-
-    subspace_sweep = {}
-    angle = math.pi / 4
-    for n_sub in NUM_SUBSPACES_SWEEP:
-        delta = 0.001 * (angle ** 1.5) * n_sub
-        ppl = baseline_ppl * (1 + delta)
-        subspace_sweep[str(n_sub)] = {
-            "num_subspaces": n_sub, "mean_ppl": ppl, "std_ppl": 0.5 + delta * 2,
-            "relative_change": delta
-        }
-
-    return {
-        "baseline_ppl": baseline_ppl,
-        "angle_sweep": angle_sweep,
-        "subspace_sweep": subspace_sweep,
-    }
-
-
 def generate_figure6(results, output_dir=OUTPUT_DIR):
     """Generate PPL vs rotation angle line chart."""
     os.makedirs(output_dir, exist_ok=True)
@@ -201,7 +167,6 @@ def determine_max_safe_angle(results, threshold=0.05):
 
 def main():
     parser = argparse.ArgumentParser(description="PPL tolerance sweep")
-    parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--num-sequences", type=int, default=100)
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
@@ -222,17 +187,14 @@ def main():
 
     print(f"Target subspaces: {target_subspaces}")
 
-    if args.synthetic:
-        results = run_synthetic_sweep(target_subspaces)
+    from utils import load_model, load_model_from_config
+    from analysis.rope_ablation import load_wikitext
+    if args.config:
+        model, tokenizer, _ = load_model_from_config(args.config)
     else:
-        from utils import load_model, load_model_from_config
-        from analysis.rope_ablation import load_wikitext
-        if args.config:
-            model, tokenizer, _ = load_model_from_config(args.config)
-        else:
-            model, tokenizer = load_model()
-        eval_texts = load_wikitext(args.num_sequences)
-        results = run_ppl_sweep(model, tokenizer, eval_texts, target_subspaces)
+        model, tokenizer = load_model()
+    eval_texts = load_wikitext(args.num_sequences)
+    results = run_ppl_sweep(model, tokenizer, eval_texts, target_subspaces)
 
     # Figure 6
     generate_figure6(results, args.output_dir)

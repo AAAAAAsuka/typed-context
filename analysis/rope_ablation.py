@@ -8,7 +8,6 @@ repurposing.
 Usage:
     python analysis/rope_ablation.py                     # full ablation study
     python analysis/rope_ablation.py --num-sequences 10  # quick test
-    python analysis/rope_ablation.py --synthetic          # synthetic eval (no GPU)
 """
 
 import argparse
@@ -194,10 +193,7 @@ def compute_perplexity(model, tokenizer, texts, max_length=2048):
 
 
 def load_wikitext(num_sequences=100, seq_length=2048):
-    """Load WikiText sequences for perplexity evaluation.
-
-    Falls back to synthetic text if WikiText is unavailable.
-    """
+    """Load WikiText sequences for perplexity evaluation."""
     try:
         from datasets import load_dataset
         dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="test")
@@ -215,32 +211,7 @@ def load_wikitext(num_sequences=100, seq_length=2048):
         print(f"Loaded {len(texts)} sequences from WikiText-103")
         return texts
     except Exception as e:
-        print(f"WikiText loading failed ({e}), using synthetic text")
-        return generate_synthetic_texts(num_sequences, seq_length)
-
-
-def generate_synthetic_texts(num_sequences=100, seq_length=2048):
-    """Generate synthetic texts for perplexity evaluation when WikiText unavailable."""
-    rng = np.random.RandomState(42)
-    # Use a simple vocabulary to generate pseudo-text
-    words = ["the", "a", "is", "was", "are", "were", "been", "being",
-             "have", "has", "had", "do", "does", "did", "will", "would",
-             "could", "should", "may", "might", "shall", "can",
-             "not", "and", "but", "or", "if", "then", "than", "that",
-             "this", "these", "those", "it", "its", "they", "them",
-             "he", "she", "we", "you", "I", "me", "my", "our", "your",
-             "who", "what", "when", "where", "which", "how", "why",
-             "all", "each", "every", "both", "few", "more", "most",
-             "other", "some", "any", "no", "only", "own", "same",
-             "time", "way", "year", "day", "man", "world", "life",
-             "hand", "part", "place", "case", "week", "work", "system"]
-    texts = []
-    for _ in range(num_sequences):
-        # ~4 chars per word + space, need ~seq_length*4 chars
-        n_words = seq_length * 4 // 5
-        text = " ".join(rng.choice(words, n_words))
-        texts.append(text)
-    return texts
+        raise RuntimeError(f"WikiText loading failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -331,69 +302,6 @@ def run_ablation_study(model, tokenizer, eval_texts, rope_params, num_sequences=
     return results
 
 
-def run_synthetic_ablation(rope_params):
-    """Synthetic ablation study when model is unavailable.
-
-    Simulates expected results based on RoPE theory:
-    - Low-freq subspaces (near-constant): minimal PPL impact when ablated
-    - High-freq subspaces: small PPL impact (redundant at high frequencies)
-    - Mid-freq subspaces: largest PPL impact (carry useful position info)
-    """
-    head_dim = rope_params["head_dim"]
-    rope_theta = rope_params["rope_theta"]
-    max_pos = rope_params["max_position_embeddings"]
-    num_subspaces = head_dim // 2
-
-    indices = np.arange(0, head_dim, 2, dtype=np.float64)
-    freqs = 1.0 / (rope_theta ** (indices / head_dim))
-    wavelengths = 2 * np.pi / freqs
-
-    freq_order = np.argsort(freqs)
-    high_freq_top5 = freq_order[-5:].tolist()
-    low_freq_top5 = freq_order[:5].tolist()
-
-    rng = np.random.RandomState(42)
-    mid_indices = freq_order[10:num_subspaces - 10]
-    mid_random5 = rng.choice(mid_indices, 5, replace=False).tolist()
-
-    # Simulated baseline PPL (typical for Llama-8B on WikiText)
-    baseline_ppl = 6.5
-
-    results = {
-        "baseline": {
-            "mean_ppl": baseline_ppl,
-            "std_ppl": 0.8,
-            "ablated_subspaces": [],
-            "relative_change": 0.0,
-        },
-        "high_freq_top5": {
-            "mean_ppl": baseline_ppl * 1.003,  # ~0.3% increase
-            "std_ppl": 0.85,
-            "ablated_subspaces": high_freq_top5,
-            "relative_change": 0.003,
-        },
-        "low_freq_top5": {
-            "mean_ppl": baseline_ppl * 1.002,  # ~0.2% increase (near-constant dims)
-            "std_ppl": 0.82,
-            "ablated_subspaces": low_freq_top5,
-            "relative_change": 0.002,
-        },
-        "mid_random5": {
-            "mean_ppl": baseline_ppl * 1.035,  # ~3.5% increase (useful dims)
-            "std_ppl": 1.1,
-            "ablated_subspaces": mid_random5,
-            "relative_change": 0.035,
-        },
-    }
-
-    print("\nSynthetic ablation results (simulated):")
-    for name, res in results.items():
-        print(f"  {name}: PPL={res['mean_ppl']:.2f} ± {res['std_ppl']:.2f}, "
-              f"relative change={res['relative_change']:.4%}")
-
-    return results
-
-
 # ---------------------------------------------------------------------------
 # Figure 5: Ablation perplexity bar chart
 # ---------------------------------------------------------------------------
@@ -480,8 +388,6 @@ def main():
                         help="Number of eval sequences")
     parser.add_argument("--max-length", type=int, default=2048,
                         help="Max tokens per sequence")
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Use synthetic results (no GPU/model needed)")
     parser.add_argument("--output-dir", default=OUTPUT_DIR)
     parser.add_argument("--config-dir", default=CONFIG_DIR)
     parser.add_argument("--config", default=None,
@@ -503,23 +409,19 @@ def main():
           f"theta={rope_params['rope_theta']}, "
           f"max_pos={rope_params['max_position_embeddings']}")
 
-    if args.synthetic:
-        # Synthetic ablation (no model needed)
-        results = run_synthetic_ablation(rope_params)
+    # Load model and run real ablation
+    from utils import load_model, load_model_from_config
+    print("Loading model...")
+    if args.config:
+        model, tokenizer, _ = load_model_from_config(args.config)
     else:
-        # Load model and run real ablation
-        from utils import load_model, load_model_from_config
-        print("Loading model...")
-        if args.config:
-            model, tokenizer, _ = load_model_from_config(args.config)
-        else:
-            model, tokenizer = load_model()
-        print("Loading eval texts...")
-        eval_texts = load_wikitext(args.num_sequences, args.max_length)
-        print(f"Loaded {len(eval_texts)} eval sequences")
-        results = run_ablation_study(
-            model, tokenizer, eval_texts, rope_params, args.num_sequences
-        )
+        model, tokenizer = load_model()
+    print("Loading eval texts...")
+    eval_texts = load_wikitext(args.num_sequences, args.max_length)
+    print(f"Loaded {len(eval_texts)} eval sequences")
+    results = run_ablation_study(
+        model, tokenizer, eval_texts, rope_params, args.num_sequences
+    )
 
     # Generate Figure 5
     generate_figure5(results, args.output_dir)

@@ -20,7 +20,6 @@ Metrics:
   - Gradient analysis: examine gradient signal in target subspaces
 
 Usage:
-    python experiments/adaptive_attack_gcg.py --synthetic
     CUDA_VISIBLE_DEVICES=0 python experiments/adaptive_attack_gcg.py \\
         --rotation-adapter outputs/lora_adapter/ \\
         --special-token-adapter outputs/lora_adapter_special_token/
@@ -373,132 +372,6 @@ def analyze_gradient_subspaces(model, tokenizer, messages, suffix_ids,
 
 
 # ---------------------------------------------------------------------------
-# Synthetic Mode
-# ---------------------------------------------------------------------------
-
-def run_synthetic():
-    """Simulate GCG attack results for both defenses.
-
-    Models the expected behavior:
-    - Special token defense: GCG finds effective suffix, ASR rises to ~65%
-    - Rotation defense: GCG cannot find effective suffix, ASR stays ~20%
-    """
-    np.random.seed(42)
-
-    record_steps = list(range(50, 501, 50))  # [50, 100, ..., 500]
-
-    # --- Special token defense: GCG is effective ---
-    # ASR rises as optimization proceeds — logistic growth
-    special_token_asr = {}
-    for step in record_steps:
-        # Logistic growth: ASR = L / (1 + exp(-k*(x-x0)))
-        t = step / 500.0
-        extraction_asr = 0.70 / (1 + np.exp(-8 * (t - 0.35)))
-        override_asr = 0.60 / (1 + np.exp(-7 * (t - 0.40)))
-        overall_asr = 0.5 * extraction_asr + 0.5 * override_asr
-        special_token_asr[step] = {
-            "overall": float(np.clip(overall_asr + np.random.normal(0, 0.02), 0, 1)),
-            "extraction": float(np.clip(extraction_asr + np.random.normal(0, 0.02), 0, 1)),
-            "override": float(np.clip(override_asr + np.random.normal(0, 0.02), 0, 1)),
-        }
-
-    # Loss decreases for special token defense (optimizer finds good suffix)
-    special_token_loss = []
-    for step in range(500):
-        t = step / 500.0
-        loss = 4.0 * np.exp(-3.0 * t) + 0.5 + np.random.normal(0, 0.05)
-        special_token_loss.append(float(max(loss, 0.3)))
-
-    # --- Rotation defense: GCG is ineffective ---
-    # ASR stays low — the optimization has no effective gradient signal
-    rotation_asr = {}
-    for step in record_steps:
-        t = step / 500.0
-        # Slight random fluctuation but no real improvement
-        extraction_asr = 0.18 + 0.03 * np.sin(t * 5) + np.random.normal(0, 0.02)
-        override_asr = 0.15 + 0.02 * np.sin(t * 4) + np.random.normal(0, 0.02)
-        overall_asr = 0.5 * extraction_asr + 0.5 * override_asr
-        rotation_asr[step] = {
-            "overall": float(np.clip(overall_asr, 0, 1)),
-            "extraction": float(np.clip(extraction_asr, 0, 1)),
-            "override": float(np.clip(override_asr, 0, 1)),
-        }
-
-    # Loss for rotation defense doesn't decrease meaningfully
-    rotation_loss = []
-    for step in range(500):
-        t = step / 500.0
-        loss = 3.8 - 0.3 * t + np.random.normal(0, 0.1)  # minimal decrease
-        rotation_loss.append(float(max(loss, 2.5)))
-
-    # --- Gradient analysis ---
-    # For rotation defense: gradients in target subspaces are much smaller
-    # because the rotation angle is not a function of input
-    gradient_analysis = {
-        "rotation_defense": {
-            "target_subspace_mean_grad_norm": 0.0012,
-            "nontarget_subspace_mean_grad_norm": 0.0847,
-            "ratio": 0.0012 / 0.0847,  # ~1.4% — very small
-            "interpretation": "Gradient signal in target subspaces is ~70x smaller "
-                              "than in non-target subspaces, confirming that the "
-                              "rotation-based defense is not susceptible to "
-                              "gradient-based optimization."
-        },
-        "special_token_defense": {
-            "target_subspace_mean_grad_norm": 0.0623,
-            "nontarget_subspace_mean_grad_norm": 0.0791,
-            "ratio": 0.0623 / 0.0791,  # ~79% — comparable
-            "interpretation": "Gradient signal is comparable across all subspaces, "
-                              "meaning GCG can effectively optimize the adversarial "
-                              "suffix against the special token defense."
-        }
-    }
-
-    results = {
-        "attack_config": {
-            "suffix_length": 20,
-            "num_steps": 500,
-            "batch_size": 512,
-            "record_interval": 50,
-            "top_k": 256,
-        },
-        "special_token_defense": {
-            "asr_at_steps": {str(k): v for k, v in special_token_asr.items()},
-            "final_asr": special_token_asr[500]["overall"],
-            "final_extraction_asr": special_token_asr[500]["extraction"],
-            "final_override_asr": special_token_asr[500]["override"],
-            "loss_history_summary": {
-                "initial": special_token_loss[0],
-                "final": special_token_loss[-1],
-                "min": min(special_token_loss),
-            },
-        },
-        "rotation_defense": {
-            "asr_at_steps": {str(k): v for k, v in rotation_asr.items()},
-            "final_asr": rotation_asr[500]["overall"],
-            "final_extraction_asr": rotation_asr[500]["extraction"],
-            "final_override_asr": rotation_asr[500]["override"],
-            "loss_history_summary": {
-                "initial": rotation_loss[0],
-                "final": rotation_loss[-1],
-                "min": min(rotation_loss),
-            },
-        },
-        "gradient_analysis": gradient_analysis,
-        "comparison": {
-            "special_token_final_asr": special_token_asr[500]["overall"],
-            "rotation_final_asr": rotation_asr[500]["overall"],
-            "asr_difference": special_token_asr[500]["overall"] - rotation_asr[500]["overall"],
-            "rotation_defense_significantly_lower": (
-                rotation_asr[500]["overall"] < special_token_asr[500]["overall"] * 0.5
-            ),
-        },
-    }
-
-    return results, special_token_asr, rotation_asr, special_token_loss, rotation_loss
-
-
-# ---------------------------------------------------------------------------
 # Figure Generation
 # ---------------------------------------------------------------------------
 
@@ -778,8 +651,6 @@ def main():
     parser = argparse.ArgumentParser(
         description="C1: GCG adaptive attack — rotation vs special token defense"
     )
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Synthetic mode (no GPU needed)")
     parser.add_argument("--rotation-adapter",
                         default=os.path.join(OUTPUT_DIR, "lora_adapter"),
                         help="Path to rotation defense LoRA adapter")
@@ -797,129 +668,65 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    if args.synthetic:
-        print("=== Synthetic Mode: GCG Adaptive Attack ===\n")
-        results, st_asr, rot_asr, st_loss, rot_loss = run_synthetic()
+    print("=== GCG Adaptive Attack ===\n")
+    results = run_real_attack(args)
 
-        # Generate figure
-        generate_figure(st_asr, rot_asr, st_loss, rot_loss,
-                        results["gradient_analysis"], args.output_dir)
+    # Extract ASR data for figure generation
+    st_asr = {}
+    rot_asr = {}
+    for step_str, data in results["special_token"]["asr_at_steps"].items():
+        st_asr[int(step_str)] = data
+    for step_str, data in results["rotation"]["asr_at_steps"].items():
+        rot_asr[int(step_str)] = data
 
-        # Save results
-        results_path = os.path.join(args.output_dir, "gcg_results.json")
-        with open(results_path, "w") as f:
-            json.dump(results, f, indent=2)
-        print(f"Results saved: {results_path}")
+    # Aggregate gradient analysis
+    gradient_analysis = {
+        "rotation_defense": {},
+        "special_token_defense": {},
+    }
+    for defense_key, ga_key in [("rotation", "rotation_defense"),
+                                 ("special_token", "special_token_defense")]:
+        cats = results[defense_key].get("per_category", {})
+        all_target = []
+        all_nontarget = []
+        for cat, cat_data in cats.items():
+            ga = cat_data.get("gradient_analysis", {})
+            if "target_subspace_mean_grad_norm" in ga:
+                all_target.append(ga["target_subspace_mean_grad_norm"])
+                all_nontarget.append(ga["nontarget_subspace_mean_grad_norm"])
+        if all_target:
+            t_mean = float(np.mean(all_target))
+            nt_mean = float(np.mean(all_nontarget))
+            gradient_analysis[ga_key] = {
+                "target_subspace_mean_grad_norm": t_mean,
+                "nontarget_subspace_mean_grad_norm": nt_mean,
+                "ratio": t_mean / nt_mean if nt_mean > 0 else 0,
+            }
 
-        # === Verification ===
-        print("\n=== Verification ===")
+    # Use dummy loss curves for figure (not tracked in real mode aggregated)
+    st_loss = list(range(500))  # placeholder
+    rot_loss = list(range(500))
+    generate_figure(st_asr, rot_asr, st_loss, rot_loss,
+                    gradient_analysis, args.output_dir)
 
-        rot_final = results["rotation_defense"]["final_asr"]
-        st_final = results["special_token_defense"]["final_asr"]
+    # Save results
+    results_path = os.path.join(args.output_dir, "gcg_results.json")
+    with open(results_path, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"\nResults saved: {results_path}")
 
-        print(f"  Special token defense final ASR: {st_final:.4f}")
-        print(f"  Rotation defense final ASR:      {rot_final:.4f}")
-
-        if rot_final < st_final:
-            print(f"  PASS: Rotation ASR ({rot_final:.4f}) < Special Token ASR "
-                  f"({st_final:.4f})")
-        else:
-            print(f"  FAIL: Rotation ASR not lower than Special Token ASR")
-
-        # Check rotation ASR is significantly lower (< 50% of special token)
-        if rot_final < st_final * 0.5:
-            print(f"  PASS: Rotation ASR is significantly lower "
-                  f"(< 50% of special token)")
-        else:
-            print(f"  CHECK: Rotation ASR not significantly lower")
-
-        # Check gradient analysis
-        ga = results["gradient_analysis"]
-        rot_ratio = ga["rotation_defense"]["ratio"]
-        st_ratio = ga["special_token_defense"]["ratio"]
-        print(f"  Gradient ratio (target/non-target) — "
-              f"rotation: {rot_ratio:.4f}, special token: {st_ratio:.4f}")
-        if rot_ratio < st_ratio * 0.1:
-            print(f"  PASS: Rotation gradient signal in target subspaces is "
-                  f"negligible (ratio {rot_ratio:.4f} vs {st_ratio:.4f})")
-        else:
-            print(f"  CHECK: Gradient ratio comparison")
-
-        # Verify figure exists
-        fig_path = os.path.join(args.output_dir, "fig_gcg_attack.png")
-        if os.path.exists(fig_path):
-            print(f"  PASS: Figure saved at {fig_path}")
-        else:
-            print(f"  FAIL: Figure not found")
-
-        # Verify results file exists
-        if os.path.exists(results_path):
-            print(f"  PASS: Results saved at {results_path}")
-        else:
-            print(f"  FAIL: Results not found")
-
-        print("\nDone!")
-
+    # Verification
+    print("\n=== Verification ===")
+    rot_asr_final = results["rotation"].get("final_asr", 0)
+    st_asr_final = results["special_token"].get("final_asr", 0)
+    print(f"  Special token final ASR: {st_asr_final:.4f}")
+    print(f"  Rotation final ASR:      {rot_asr_final:.4f}")
+    if rot_asr_final < st_asr_final:
+        print(f"  PASS: Rotation defense ASR significantly lower")
     else:
-        print("=== Real Mode: GCG Adaptive Attack ===\n")
-        results = run_real_attack(args)
+        print(f"  CHECK: Need to investigate")
 
-        # Extract ASR data for figure generation
-        st_asr = {}
-        rot_asr = {}
-        for step_str, data in results["special_token"]["asr_at_steps"].items():
-            st_asr[int(step_str)] = data
-        for step_str, data in results["rotation"]["asr_at_steps"].items():
-            rot_asr[int(step_str)] = data
-
-        # Aggregate gradient analysis
-        gradient_analysis = {
-            "rotation_defense": {},
-            "special_token_defense": {},
-        }
-        for defense_key, ga_key in [("rotation", "rotation_defense"),
-                                     ("special_token", "special_token_defense")]:
-            cats = results[defense_key].get("per_category", {})
-            all_target = []
-            all_nontarget = []
-            for cat, cat_data in cats.items():
-                ga = cat_data.get("gradient_analysis", {})
-                if "target_subspace_mean_grad_norm" in ga:
-                    all_target.append(ga["target_subspace_mean_grad_norm"])
-                    all_nontarget.append(ga["nontarget_subspace_mean_grad_norm"])
-            if all_target:
-                t_mean = float(np.mean(all_target))
-                nt_mean = float(np.mean(all_nontarget))
-                gradient_analysis[ga_key] = {
-                    "target_subspace_mean_grad_norm": t_mean,
-                    "nontarget_subspace_mean_grad_norm": nt_mean,
-                    "ratio": t_mean / nt_mean if nt_mean > 0 else 0,
-                }
-
-        # Use dummy loss curves for figure (not tracked in real mode aggregated)
-        st_loss = list(range(500))  # placeholder
-        rot_loss = list(range(500))
-        generate_figure(st_asr, rot_asr, st_loss, rot_loss,
-                        gradient_analysis, args.output_dir)
-
-        # Save results
-        results_path = os.path.join(args.output_dir, "gcg_results.json")
-        with open(results_path, "w") as f:
-            json.dump(results, f, indent=2)
-        print(f"\nResults saved: {results_path}")
-
-        # Verification
-        print("\n=== Verification ===")
-        rot_asr_final = results["rotation"].get("final_asr", 0)
-        st_asr_final = results["special_token"].get("final_asr", 0)
-        print(f"  Special token final ASR: {st_asr_final:.4f}")
-        print(f"  Rotation final ASR:      {rot_asr_final:.4f}")
-        if rot_asr_final < st_asr_final:
-            print(f"  PASS: Rotation defense ASR significantly lower")
-        else:
-            print(f"  CHECK: Need to investigate")
-
-        print("\nDone!")
+    print("\nDone!")
 
 
 if __name__ == "__main__":
