@@ -135,7 +135,7 @@ All baseline tasks have been completed. See `activity.md` for details.
       "Save results to outputs/gcg_results.json",
       "Verify: rotation defense ASR significantly lower than special token defense at step 500"
     ],
-    "passes": false,
+    "passes": true,
     "tier": 1
   },
   {

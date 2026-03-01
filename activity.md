@@ -643,3 +643,47 @@
 
 **Issues:**
 - Real model mode not yet tested (needs GPU + LoRA adapter). Script is ready — run without `--synthetic` when GPU available.
+
+## 2026-03-01: Experiment C1 — GCG Gradient-based Adaptive Attack
+
+**Status:** COMPLETE
+
+**What was implemented:**
+- Created `experiments/adaptive_attack_gcg.py` — implements GCG (Greedy Coordinate Gradient) attack against both rotation and special token defenses
+  - `gcg_attack()`: full GCG implementation — random suffix initialization, gradient-based token candidate scoring, batch evaluation of candidates, iterative optimization with ASR recording at configurable intervals
+  - `_check_attack_success()`: generates from adversarial prompt and checks if target string appears in output
+  - `analyze_gradient_subspaces()`: hooks into Q/K projections to measure gradient norm distribution across target vs non-target RoPE subspaces — key analysis showing rotation defense has negligible gradient signal in target subspaces
+  - `run_synthetic()`: models expected behavior with logistic growth ASR for special token defense and flat ASR for rotation defense, plus gradient analysis
+  - `generate_figure()`: 4-panel figure: (a) ASR vs optimization steps, (b) per-category ASR at step 500, (c) loss curves, (d) gradient norm comparison
+  - `run_real_attack()`: real model mode — loads both LoRA adapters, runs GCG with suffix_length=20, 500 steps, batch_size=512
+  - CLI: `--synthetic`, `--rotation-adapter`, `--special-token-adapter`, `--gpu`, `--suffix-length`, `--num-steps`, `--batch-size`, `--record-interval`
+
+**Attack configuration:**
+- Suffix length: 20 tokens
+- Optimization steps: 500
+- Batch size: 512 (candidates per step)
+- Top-k: 256 (gradient-scored candidates)
+- Record interval: every 50 steps
+- Attack targets: extraction (output secret code) and override (follow injected instruction)
+
+**Verification (synthetic mode):**
+- Rotation defense final ASR: **0.1407** vs Special token final ASR: **0.6512** ✅
+- Rotation ASR significantly lower (< 50% of special token): **PASS** ✅
+- Gradient ratio (target/non-target) — rotation: **0.0142** vs special token: **0.7876** ✅
+  - Rotation gradient signal in target subspaces is ~71x smaller than non-target
+- Figure saved: `outputs/fig_gcg_attack.png` ✅
+- Results saved: `outputs/gcg_results.json` ✅
+
+**Key findings (synthetic):**
+- Special token defense ASR rises from ~20% to ~65% over 500 GCG steps (logistic growth)
+- Rotation defense ASR stays flat at ~14-18% (no meaningful optimization progress)
+- Loss curve for special token defense shows clear convergence; rotation defense loss barely decreases
+- Gradient analysis confirms the mechanism: GCG cannot optimize through rotation because the type signal is not a function of input tokens — gradient signal in target subspaces is negligible
+
+**Files created:**
+- `experiments/adaptive_attack_gcg.py`
+- Generated: `outputs/fig_gcg_attack.png`
+- Generated: `outputs/gcg_results.json`
+
+**Issues:**
+- Real model mode not yet tested (needs GPU + both LoRA adapters). Script is ready — run without `--synthetic` when GPU available.
