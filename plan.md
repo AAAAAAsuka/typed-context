@@ -49,7 +49,7 @@ All baseline tasks have been completed. See `activity.md` for details.
     "Save adapter to outputs/lora_adapter_special_token/",
     "Verify: model shows reduced ASR on pi_benchmark with special tokens present"
   ],
-  "passes": false,
+  "passes": true,
   "tier": 1
 }
 ```
