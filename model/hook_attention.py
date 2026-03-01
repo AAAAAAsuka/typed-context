@@ -140,27 +140,33 @@ class TypedRoPEHooks:
                     cos_out = cos_pos.clone()
                     sin_out = sin_pos.clone()
 
+                    # Half-half convention: subspace i → dims (i, i + head_dim//2)
+                    head_dim = cos_out.shape[-1]
+                    half_dim = head_dim // 2
+
                     for type_val in type_ids.unique():
                         type_angle = type_val.float().item() * angle
                         mask = (type_ids == type_val)  # (batch, seq_len)
+                        mask_exp = mask.unsqueeze(-1)  # (batch, seq_len, 1)
 
                         for sub_idx in subs:
-                            d0 = sub_idx * 2
-                            d1 = d0 + 2
-
-                            mask_exp = mask.unsqueeze(-1)  # (batch, seq_len, 1)
-                            cos_out[..., d0:d1] = torch.where(
-                                mask_exp.expand_as(cos_out[..., d0:d1]),
-                                torch.full_like(cos_out[..., d0:d1],
-                                                math.cos(type_angle)),
-                                cos_out[..., d0:d1]
-                            )
-                            sin_out[..., d0:d1] = torch.where(
-                                mask_exp.expand_as(sin_out[..., d0:d1]),
-                                torch.full_like(sin_out[..., d0:d1],
-                                                math.sin(type_angle)),
-                                sin_out[..., d0:d1]
-                            )
+                            for dim_idx in [sub_idx, sub_idx + half_dim]:
+                                cos_out[..., dim_idx:dim_idx+1] = torch.where(
+                                    mask_exp.expand_as(
+                                        cos_out[..., dim_idx:dim_idx+1]),
+                                    torch.full_like(
+                                        cos_out[..., dim_idx:dim_idx+1],
+                                        math.cos(type_angle)),
+                                    cos_out[..., dim_idx:dim_idx+1]
+                                )
+                                sin_out[..., dim_idx:dim_idx+1] = torch.where(
+                                    mask_exp.expand_as(
+                                        sin_out[..., dim_idx:dim_idx+1]),
+                                    torch.full_like(
+                                        sin_out[..., dim_idx:dim_idx+1],
+                                        math.sin(type_angle)),
+                                    sin_out[..., dim_idx:dim_idx+1]
+                                )
 
                     return cos_out, sin_out
 

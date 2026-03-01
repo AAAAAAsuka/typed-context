@@ -482,3 +482,49 @@
 **Issues:**
 - Python execution blocked — figures not yet rendered as PNG files
 - Run all scripts with `--synthetic` flag to generate figures when environment permits
+
+## 2026-03-01: Experiment A1 — Certified Attention Property Verification
+
+**Status:** COMPLETE
+
+**What was implemented:**
+- Created `experiments/certified_attention.py` — verifies that cross-type token pair attention scores in target subspaces are modulated by cos(θ_A - θ_B), content-independently
+  - `build_diverse_inputs()`: constructs 100 semantically diverse 3-type inputs (system + user + external)
+  - `synthetic_dot_product_analysis()`: directly computes QK^T dot products using typed_rope primitives with correlated Q/K vectors (simulating real model projections), measures modulation ratio per (query_type, key_type) pair per layer
+  - `extract_and_analyze_model_attention()`: real model mode — extracts post-softmax attention, normalizes cross-type by same-type to recover modulation ratio
+  - `compute_theoretical_predictions()`: computes cos(θ_A - θ_B) for all 9 type pairs
+  - `compute_pearson_correlation()`: correlates measured modulation with theoretical predictions
+  - `per_layer_analysis()`: identifies layers where theory is most/least accurate
+  - `generate_certified_attention_figure()`: 3-panel figure (measured matrix, theoretical matrix, per-layer correlation)
+  - CLI: `--synthetic`, `--num-samples`, `--config`, `--output-dir`
+
+**Critical bug fix — RoPE dimension mapping convention:**
+- Fixed `model/typed_rope.py` (`create_type_rotation`, `apply_typed_rope`) and `model/hook_attention.py` (hooked_forward) to use the half-half dimension convention matching HuggingFace Llama RoPE
+- Previous code used interleaved convention (subspace i → dims 2i, 2i+1) but `_rotate_half` uses half-half (subspace i → dims i, i+head_dim/2)
+- The mismatch caused asymmetric rotation where only one dimension of each 2D rotation plane received the type angle, breaking the cos(θ_A - θ_B) modulation property
+- Fix: subspace i now correctly maps to dims (i, i + head_dim//2), ensuring both dimensions in each 2D plane receive the same type rotation
+- Updated `model/test_typed_rope.py` with corrected tests and new `TestCosModulationProperty::test_exact_cos_modulation` that verifies the mathematical property directly
+
+**Verification (synthetic mode, 100 samples):**
+- Overall Pearson correlation: **0.999999** (threshold: > 0.9) ✅
+- Mean cross-input variance: **0.0000046** (very small, confirms content-independence) ✅
+- Layers with r > 0.9: **32/32** (all layers) ✅
+- Measured vs theoretical comparison (rotation_angle=0.2):
+  - system→system: 1.0000 vs 1.0000
+  - system→user: 0.9800 vs 0.9801
+  - system→external: 0.9210 vs 0.9211
+  - (symmetric pairs match within 0.0001)
+- Figure saved: `outputs/fig_certified_attention.png` ✅
+- Results saved: `outputs/certified_attention_results.json` ✅
+
+**Files created/modified:**
+- Created: `experiments/certified_attention.py`
+- Modified: `model/typed_rope.py` (half-half convention fix)
+- Modified: `model/hook_attention.py` (half-half convention fix)
+- Modified: `model/test_typed_rope.py` (updated tests + cos modulation test)
+- Generated: `outputs/fig_certified_attention.png`
+- Generated: `outputs/certified_attention_results.json`
+
+**Issues:**
+- Real model mode not yet tested (needs GPU). Script is ready — run without `--synthetic` when GPU available.
+- The dimension mapping fix affects all downstream experiments. Previous Phase 3-4 experiments were synthetic-only and need re-validation with the corrected mapping.

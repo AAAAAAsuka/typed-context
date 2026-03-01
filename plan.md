@@ -2,244 +2,473 @@
 
 ## Overview
 
-Research codebase for investigating and validating typed context encoding via RoPE rotation for prompt injection defense. The project progresses through 4 experimental phases: probing, RoPE analysis, ICL verification, and LoRA finetuning.
+Research codebase for investigating and validating typed context encoding via RoPE rotation for prompt injection defense. Phase 1-4 baseline experiments are complete. This plan covers the follow-up experiments (A-H) that establish formal security guarantees, adaptive attack robustness, utility preservation, and mechanism understanding.
 
-**Reference:** `proj.md` (full engineering document with theoretical motivation, expected results, and visualization specs)
+**Reference:**
+- `proj.md` — Follow-up experiment plan (experiments A-H, priority tiers, paper figure list)
+- `proj_v1.md` — Original engineering document (Phase 1-4 methodology, code templates)
+- `activity.md` — Completed work log
 
 ---
 
-## Task List
+## Completed Tasks (Phase 1-4)
+
+All baseline tasks have been completed. See `activity.md` for details.
+
+- [x] Project scaffolding and environment setup
+- [x] Build probing datasets with token-level source labels
+- [x] Phase 1: Extract hidden states for probing
+- [x] Phase 1: Train linear probes and generate visualizations (Fig 1-3)
+- [x] Phase 2: RoPE frequency spectrum analysis (Fig 4)
+- [x] Phase 2: RoPE dimension ablation study (Fig 5)
+- [x] Phase 3: Implement typed RoPE core module + unit tests
+- [x] Phase 3: PPL tolerance sweep (Fig 6)
+- [x] Phase 3: Attention pattern analysis under type rotation (Fig 7)
+- [x] Phase 3: ICL experiment — all 5 conditions A-E (Fig 8)
+- [x] Phase 3: Indirect PI experiment (3-type)
+- [x] Phase 3.5: Quantization robustness check (Fig 9)
+- [x] Phase 4: LoRA finetuning with typed RoPE
+- [x] Phase 4: LoRA evaluation with ablation (Fig 10-11)
+- [x] Summary figure and results compilation (Fig 12)
+
+---
+
+## Follow-up Task List
+
+### Prerequisites
+
+```json
+{
+  "category": "prerequisite",
+  "description": "Train special token defense baseline (needed for experiments B2, C1, C2)",
+  "id": "P1",
+  "steps": [
+    "Train a special token defense baseline: use [SYS_START]/[SYS_END] to wrap system prompt",
+    "Use same LoRA config (r=16, alpha=32, target q/k/v/o) and same training data",
+    "Train model to rely on these tokens for security decisions",
+    "Save adapter to outputs/lora_adapter_special_token/",
+    "Verify: model shows reduced ASR on pi_benchmark with special tokens present"
+  ],
+  "passes": false,
+  "tier": 1
+}
+```
+
+### Tier 1: Core Contributions (Must Complete)
 
 ```json
 [
   {
-    "category": "setup",
-    "description": "Project scaffolding and environment setup",
+    "category": "experiment_A",
+    "description": "A1: Theory vs actual attention structure — verify certified attention property",
+    "id": "A1",
+    "depends_on": [],
     "steps": [
-      "Create directory structure: data/, analysis/, model/, experiments/, configs/, outputs/, screenshots/",
-      "Create requirements.txt with: torch>=2.1, transformers>=4.40, peft>=0.10, accelerate, scikit-learn, numpy, matplotlib, seaborn, datasets, bitsandbytes",
-      "Create configs/llama8b.yaml with model_name, head_dim, num_layers, rope_theta, max_position_embeddings",
-      "Create a shared utils.py with: load_model helper (supports fp16/int8/int4), chat_template tokenizer wrapper, token-level source label assignment (system=0, user=1, external=2)",
-      "Verify: python -c 'import torch; from transformers import AutoModelForCausalLM; print(\"OK\")' runs without error"
+      "Create experiments/certified_attention.py",
+      "Fix theta_type and target subspaces configuration",
+      "Construct 100 semantically diverse inputs (system + user + external), varying length/style/topic",
+      "Extract raw attention scores in target subspaces for all layers and heads",
+      "For each (query_type, key_type) pair, compute attention score mean and variance",
+      "Compare measured mean with theoretical prediction cos(theta_A - theta_B)",
+      "Report Pearson correlation (should be ~1) and cross-input variance (should be small)",
+      "Per-layer analysis: identify where theory is most/least accurate",
+      "Save results to outputs/certified_attention_results.json",
+      "Verify: Pearson correlation > 0.9 on target subspaces"
     ],
-    "passes": true
+    "passes": true,
+    "tier": 1
   },
   {
-    "category": "data",
-    "description": "Build probing datasets with token-level source labels",
+    "category": "experiment_A",
+    "description": "A2: Continuous trust hierarchy tuning — sweep user type angle alpha",
+    "id": "A2",
+    "depends_on": ["A1"],
     "steps": [
-      "Create data/build_probe_data.py",
-      "Generate Dataset A: 500 normal conversations (diverse system prompts + benign user queries) saved as data/normal.jsonl",
-      "Generate Dataset B: 500 PI attack samples using known attack templates (system prompt extraction, instruction override, role-play, payload smuggling) saved as data/pi_attacks.jsonl",
-      "For each PI sample, run inference on the target model and label as pi_success or pi_fail based on keyword matching (does response contain secret / follow injected instruction)",
-      "Split into data/pi_success.jsonl and data/pi_fail.jsonl",
-      "Create data/build_probe_data.py that tokenizes each sample with chat template and outputs token-level source labels (0=system, 1=user) using the system-only tokenization boundary method from proj.md Section 4.3",
-      "Create position-swapped control dataset data/swapped.jsonl (user content before system) for confound control",
-      "Verify: each jsonl has correct count, token labels are correct by spot-checking 5 samples"
+      "Create experiments/trust_hierarchy_sweep.py",
+      "Fix system theta=0, external theta=pi/2",
+      "Sweep user alpha in {0, pi/12, pi/6, pi/4, pi/3, 5*pi/12, pi/2} (7 points)",
+      "For each alpha, evaluate on LoRA model: direct PI strict ASR, indirect PI strict ASR, benign accuracy, instruction-following rate",
+      "Compute theoretical attention share bound for each alpha",
+      "Generate figure: X=alpha, left Y=ASR (lower=better), right Y=benign_acc (higher=better), overlay theoretical bound curve, annotate Pareto-optimal alpha",
+      "Save figure as outputs/fig_trust_hierarchy.png",
+      "Save results to outputs/trust_hierarchy_results.json",
+      "Verify: ASR monotonically decreases as alpha increases from 0 to pi/2"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 1
   },
   {
-    "category": "experiment",
-    "description": "Phase 1: Extract hidden states for probing",
+    "category": "experiment_B",
+    "description": "B1: delta-ASR curve — map certified attention gap to empirical ASR",
+    "id": "B1",
+    "depends_on": ["A1"],
     "steps": [
-      "Create analysis/extract_hidden_states.py that loads model in fp16, runs forward pass with output_hidden_states=True, saves per-layer hidden states and source labels to .npz files in outputs/hidden_states/",
-      "Process all 4 datasets: normal, pi_success, pi_fail, swapped",
-      "Implement batched extraction (batch_size=4) to manage GPU memory",
-      "Verify: outputs/hidden_states/ contains .npz files, shapes are (num_tokens, hidden_dim) per layer"
+      "Create experiments/delta_asr_curve.py",
+      "Define delta = mean attention gap (same-type minus cross-type) over target subspaces",
+      "Systematically vary delta via: |S| in {1,2,4,6,8,12,16} x theta in {0,pi/8,pi/4,3pi/8,pi/2} = 35 configs",
+      "For each config, compute theoretical delta and evaluate strict ASR on LoRA model with PI benchmark",
+      "Generate scatter plot: X=theoretical delta, Y=empirical ASR, fit logistic/exponential decay curve",
+      "Annotate phase transition point where ASR < 5%",
+      "Break down by 4 attack categories (extraction, override, role_play, smuggling) — do they have different delta thresholds?",
+      "Compare with-LoRA vs without-LoRA (pure ICL) delta-ASR curves",
+      "Save figure as outputs/fig_delta_asr.png",
+      "Save results to outputs/delta_asr_results.json",
+      "Verify: strong monotonic decreasing relationship between delta and ASR"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 1
   },
   {
-    "category": "experiment",
-    "description": "Phase 1: Train linear probes and generate visualizations",
+    "category": "experiment_C",
+    "description": "C1: GCG gradient-based adaptive attack",
+    "id": "C1",
+    "depends_on": ["P1"],
     "steps": [
-      "Create analysis/linear_probe.py that loads hidden states, trains LogisticRegression per layer, reports accuracy",
-      "Run probes on all 4 datasets independently (normal, pi_success, pi_fail, swapped)",
-      "Generate Figure 1: layer-wise probe accuracy curves (3 lines: normal, pi_success, pi_fail) with 95% CI from 5-fold CV, saved as outputs/fig1_probe_accuracy.png",
-      "Generate Figure 2: t-SNE at 3 layers (early/mid/late), colored by source type and shaped by condition, saved as outputs/fig2_tsne_{early,mid,late}.png",
-      "Generate Figure 3: top-20 probe weight dimensions as bar chart per layer, saved as outputs/fig3_probe_weights.png",
-      "Report swapped dataset accuracy separately as confound control",
-      "Verify: all figures saved, probe accuracy on normal data > 0.7 at early layers (sanity check)"
+      "Create experiments/adaptive_attack_gcg.py",
+      "Implement or integrate GCG attack (suffix length 20, 500 optimization steps, batch size 512)",
+      "Run GCG against both defenses: special token LoRA and rotation LoRA",
+      "Attack targets: extraction (output system prompt) and override (execute injected instruction)",
+      "Record ASR every 50 optimization steps",
+      "Generate figure: optimization steps vs ASR curves for both defenses",
+      "Analyze gradients for rotation defense: is there effective gradient signal in target subspaces?",
+      "Save figure as outputs/fig_gcg_attack.png",
+      "Save results to outputs/gcg_results.json",
+      "Verify: rotation defense ASR significantly lower than special token defense at step 500"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 1
   },
   {
-    "category": "experiment",
-    "description": "Phase 2: RoPE frequency spectrum analysis",
+    "category": "experiment_C",
+    "description": "C2: Semantic mimicry attack",
+    "id": "C2",
+    "depends_on": ["P1"],
     "steps": [
-      "Create analysis/rope_analysis.py",
-      "Compute and print frequency spectrum: for each subspace, compute freq, wavelength, rotations within max context length",
-      "Categorize subspaces into HIGH_FREQ (wavelength < 4), USEFUL, LOW_FREQ (wavelength > max_ctx)",
-      "Generate Figure 4: frequency spectrum bar+line chart with candidate subspaces highlighted, saved as outputs/fig4_rope_spectrum.png",
-      "Verify: output lists candidate subspaces for repurposing"
+      "Create experiments/mimicry_attack.py",
+      "Generate 200 mimicry attack samples: user inputs that mimic system prompt style (JSON config, natural language instructions, markdown specs)",
+      "Use LLM to auto-generate: 'write text that looks like a system prompt but instructs model to ignore previous instructions'",
+      "Evaluate ASR on both defenses: special token LoRA and rotation LoRA",
+      "Save results to outputs/mimicry_results.json",
+      "Verify: rotation defense ASR significantly lower than special token defense on mimicry attacks"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 1
   },
   {
-    "category": "experiment",
-    "description": "Phase 2: RoPE dimension ablation study",
+    "category": "experiment_D",
+    "description": "D1: Benign performance benchmark",
+    "id": "D1",
+    "depends_on": [],
     "steps": [
-      "Create analysis/rope_ablation.py that hooks into attention layers to zero out specified RoPE subspaces",
-      "Compute perplexity on 100 WikiText sequences (2048 tokens each) for: baseline, ablate top-5 high-freq, ablate top-5 low-freq, ablate 5 random mid-freq, ablate top-5 highest-importance",
-      "Generate Figure 5: ablation perplexity bar chart with error bars, saved as outputs/fig5_ablation_ppl.png",
-      "Identify final set of target_subspaces where ablation causes < 1% relative PPL change",
-      "Save target subspaces to configs/target_subspaces.json",
-      "Verify: configs/target_subspaces.json exists and contains at least 2 subspace indices"
+      "Create experiments/benign_eval.py",
+      "Evaluate baseline vs LoRA+rotation on: instruction following (100 samples), knowledge QA (200 samples), code generation (50 samples), summarization (50 samples), multi-turn dialogue (50 samples)",
+      "Use LLM-as-judge scoring (1-5 scale) for quality comparison",
+      "Report per-benchmark mean score diff with 95% CI",
+      "Save results to outputs/benign_eval_results.json",
+      "Verify: no statistically significant quality degradation (p > 0.05)"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 1
   },
   {
-    "category": "experiment",
-    "description": "Phase 3: Implement typed RoPE core module",
+    "category": "experiment_D",
+    "description": "D3: Over-refusal rate measurement",
+    "id": "D3",
+    "depends_on": ["D1"],
     "steps": [
-      "Create model/typed_rope.py with: create_type_rotation(), apply_typed_rope() functions as specified in proj.md Section 6.2",
-      "Create model/hook_attention.py with: install_type_rotation_hooks() that patches all attention layers at inference time to use typed RoPE for target subspaces",
-      "Write unit test: verify that with type_id=0 the output matches standard RoPE exactly (no regression)",
-      "Write unit test: verify that different type_ids produce different Q/K rotations in target subspaces only",
-      "Verify: python -m pytest model/test_typed_rope.py passes"
+      "Create experiments/over_refusal.py",
+      "Construct 200 'hard benign' samples — requests containing trigger-like keywords (ignore, pretend, repeat) but are legitimate",
+      "Evaluate on 3 conditions: baseline, special token defense, rotation defense",
+      "Measure false refusal rate for each condition",
+      "Save results to outputs/over_refusal_results.json",
+      "Verify: rotation defense over-refusal rate comparable to baseline (not significantly higher)"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 1
+  }
+]
+```
+
+### Tier 2: Strongly Recommended
+
+```json
+[
+  {
+    "category": "experiment_B",
+    "description": "B2: Special token delta-ASR comparison under adaptive attack",
+    "id": "B2",
+    "depends_on": ["B1", "C1"],
+    "steps": [
+      "Extend experiments/delta_asr_curve.py to compute effective delta for special token defense",
+      "Measure special token defense's delta under non-adaptive and adaptive (GCG) attacks",
+      "Overlay both defenses' delta-ASR curves on same plot",
+      "Save figure as outputs/fig_delta_asr_comparison.png",
+      "Verify: rotation delta remains stable under adaptive attack while special token delta collapses"
+    ],
+    "passes": false,
+    "tier": 2
   },
   {
-    "category": "experiment",
-    "description": "Phase 3: PPL tolerance sweep",
+    "category": "experiment_C",
+    "description": "C3: Multi-turn type confusion attack",
+    "id": "C3",
+    "depends_on": [],
     "steps": [
-      "Create experiments/ppl_sweep.py",
-      "Sweep rotation_angle in [0.01, 0.05, 0.1, 0.2, 0.5, pi/8, pi/4, pi/2] with target_subspaces from configs/target_subspaces.json",
-      "Also sweep num_subspaces in [1, 2, 4, 8] at angle=pi/4",
-      "Generate Figure 6: PPL vs rotation angle line chart (one line per num_subspaces), saved as outputs/fig6_ppl_tolerance.png",
-      "Determine max_safe_angle (largest angle where PPL increase < 5%) and save to configs/experiment.yaml",
-      "Verify: configs/experiment.yaml contains max_safe_angle and chosen num_subspaces"
+      "Create experiments/multiturn_attack.py",
+      "Construct 3-5 turn dialogue scenarios: normal early turns, PI payload in final turn",
+      "Early turns gradually introduce instruction-like phrasing to drift internal representation",
+      "After each turn, use Phase 1 linear probe to check type signal strength",
+      "Compare: rotation defense (probe accuracy should stay stable) vs special token defense (may drift)",
+      "Save results to outputs/multiturn_results.json",
+      "Verify: rotation defense probe accuracy stable across turns"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 2
   },
   {
-    "category": "experiment",
-    "description": "Phase 3: Attention pattern analysis under type rotation",
+    "category": "experiment_D",
+    "description": "D2: Target subspace count vs utility curve",
+    "id": "D2",
+    "depends_on": ["D1"],
     "steps": [
-      "Create experiments/attention_analysis.py",
-      "For 10 representative samples, compute attention weights with and without type rotation",
-      "Measure attention gap: mean(same-type attn) - mean(cross-type attn) across all heads and layers",
-      "Generate Figure 7: 2x2 attention heatmap grid (with/without rotation × most/least affected head), saved as outputs/fig7_attention_heatmaps.png",
-      "Report which heads show largest shift (these are candidate 'type-sensitive' heads)",
-      "Verify: attention gap is positive for at least some heads (type rotation creates measurable ingroup bias)"
+      "Extend experiments/benign_eval.py or create experiments/subspace_utility.py",
+      "Sweep |S| in {0, 1, 2, 4, 8, 16, 32}",
+      "For each |S|, evaluate PPL (WikiText) and MT-Bench/instruction-following score",
+      "Plot |S| vs utility curve, identify 'knee point'",
+      "Cross-reference with delta-ASR curve to show security-utility Pareto frontier",
+      "Save figure as outputs/fig_subspace_utility.png",
+      "Verify: utility degradation < 5% for |S| <= 8"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 2
   },
   {
-    "category": "experiment",
-    "description": "Phase 3: ICL experiment — delimiter baseline",
+    "category": "experiment_E",
+    "description": "E1: Layer-wise type rotation ablation",
+    "id": "E1",
+    "depends_on": [],
     "steps": [
-      "Create experiments/icl_experiment.py with modular design: takes a 'condition' argument",
-      "Implement Condition A (baseline): standard chat, no modifications",
-      "Implement Condition B (delimiter_icl): [TRUSTED]/[UNTRUSTED] text markers + 3 few-shot demos as in proj.md Section 6.5",
-      "Create data/pi_benchmark.jsonl: 200+ PI attacks covering 4 categories (extraction, override, role_play, smuggling)",
-      "Implement 2-tier PI success judgment: keyword matching + LLM judge for ambiguous cases, as specified in proj.md Section 6.6",
-      "Run Conditions A and B, save results to outputs/icl_results.json",
-      "Verify: results contain strict_ASR, soft_ASR, benign_acc, degradation for both conditions"
+      "Create experiments/layer_ablation.py",
+      "On trained LoRA+rotation model, test 4 conditions: rotation only in first 1/3 layers, middle 1/3, last 1/3, even layers only",
+      "Evaluate ASR for each condition",
+      "Identify which layer group is most critical for defense",
+      "Save results to outputs/layer_ablation_results.json",
+      "Verify: results identify which layers drive the defense effect"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 2
   },
   {
-    "category": "experiment",
-    "description": "Phase 3: ICL experiment — rotation conditions",
+    "category": "experiment_E",
+    "description": "E3: Head-level type sensitivity analysis",
+    "id": "E3",
+    "depends_on": ["E1"],
     "steps": [
-      "Extend experiments/icl_experiment.py with Condition C (rotation_only), D (rotation_icl), E (random_rotation_icl) as defined in proj.md Section 6.5-6.6",
-      "Use max_safe_angle and target_subspaces from configs/",
-      "For Condition E: apply random per-token rotations (not correlated with type) as control",
-      "Run all conditions on the same pi_benchmark.jsonl",
-      "Append results to outputs/icl_results.json",
-      "Generate Figure 8: grouped bar chart of ASR and benign_acc across 5 conditions with significance markers, saved as outputs/fig8_icl_results.png",
-      "Verify: all 5 conditions have complete results"
+      "Create experiments/head_analysis.py",
+      "For each attention head, compute type-dependent attention gap in target subspaces",
+      "Rank heads by gap magnitude, identify 'type-sensitive heads'",
+      "Ablate top type-sensitive heads individually, measure ASR change",
+      "Cross-reference with known 'instruction heads' from mechanistic interpretability literature",
+      "Save results to outputs/head_analysis_results.json",
+      "Verify: type-sensitive heads overlap with instruction-following heads"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 2
   },
   {
-    "category": "experiment",
-    "description": "Phase 3: Indirect PI experiment (3-type)",
+    "category": "experiment_G",
+    "description": "G1: Certified bound tightness analysis",
+    "id": "G1",
+    "depends_on": ["A1"],
     "steps": [
-      "Create data/build_indirect_pi.py: generate 200 samples with system + user + external (retrieved doc containing hidden PI payload)",
-      "Extend model/typed_rope.py to support 3 type categories (system=0, user=1, external=2)",
-      "Run ICL experiment with 2-type (system vs rest) and 3-type (system/user/external) conditions",
-      "Save results to outputs/indirect_pi_results.json",
-      "Verify: results show 3-type has lower ASR than 2-type on indirect PI"
+      "Extend experiments/certified_attention.py or create experiments/bound_tightness.py",
+      "Compute theoretical attention share lower bound: rho_min = n_sys / (n_sys + n_user * cos^2(theta_type))",
+      "Collect actual rho from 1000 diverse inputs",
+      "Plot histogram of rho_actual, mark rho_min",
+      "Compute gap between min(rho_actual) and rho_min",
+      "Save figure as outputs/fig_bound_tightness.png",
+      "Verify: bound is valid (all rho_actual >= rho_min)"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 2
+  }
+]
+```
+
+### Tier 3: If Time and Resources Permit
+
+```json
+[
+  {
+    "category": "experiment_C",
+    "description": "C4: Token manipulation attack (Unicode, zero-width chars, tokenizer edge cases)",
+    "id": "C4",
+    "depends_on": [],
+    "steps": [
+      "Create experiments/token_manipulation.py",
+      "Construct PI attacks with: Unicode homoglyphs, zero-width characters, extra-long sequences, mixed-language inputs",
+      "Verify type assignment pipeline correctness under all edge cases",
+      "Report any cases where type assignment fails",
+      "Verify: type assignment is correct for all edge cases"
+    ],
+    "passes": false,
+    "tier": 3
   },
   {
-    "category": "experiment",
-    "description": "Phase 3.5: Quantization robustness check",
+    "category": "experiment_E",
+    "description": "E2: Attention vs residual stream signal propagation",
+    "id": "E2",
+    "depends_on": [],
     "steps": [
-      "Create experiments/quantization_check.py",
-      "Load model in fp16, int8, int4",
-      "For each quantization × rotation angle, measure attention gap (same-type vs cross-type)",
-      "Test type category capacity: find max k where adjacent types are distinguishable",
-      "Generate Figure 9: quantization survival heatmap, saved as outputs/fig9_quant_heatmap.png",
-      "Verify: report clearly states which quant levels preserve the signal"
+      "Create experiments/signal_propagation.py",
+      "At each layer: measure linear probe accuracy on residual stream (after attention, before MLP)",
+      "At each layer: measure attention gap in target subspaces",
+      "Correlate both signals with final ASR",
+      "Determine if defense works via attention pattern modulation or residual stream features",
+      "Verify: analysis provides clear conclusion on propagation mechanism"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 3
   },
   {
-    "category": "experiment",
-    "description": "Phase 4: LoRA finetuning with typed RoPE",
+    "category": "experiment_F",
+    "description": "F1: Cross-model generalization (Qwen, Mistral)",
+    "id": "F1",
+    "depends_on": [],
     "steps": [
-      "Create data/build_training_data.py: generate 5000 training samples (2000 normal + 2000 PI refusal + 1000 hard negatives) as specified in proj.md Section 8.2",
-      "Create experiments/lora_train.py: LoRA config (r=16, target q/k/v/o proj), typed RoPE hooks active during training",
-      "Train for 3 epochs with lr=2e-5, save adapter to outputs/lora_adapter/",
-      "Verify: training loss decreases, adapter files saved"
+      "Repeat core experiments (Phase 3 ICL + Phase 4 LoRA) on Qwen2.5-7B-Instruct and Mistral-7B-Instruct-v0.3",
+      "Compare optimal |S| and theta_type across models",
+      "Verify theoretical attention bound holds on all models",
+      "Compare delta-ASR curve shapes across models",
+      "Verify: consistent findings across architectures"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 3
   },
   {
-    "category": "experiment",
-    "description": "Phase 4: LoRA evaluation with ablation",
+    "category": "experiment_F",
+    "description": "F2: Extended attack scenarios (multilingual, long-context, nested PI)",
+    "id": "F2",
+    "depends_on": [],
     "steps": [
-      "Create experiments/evaluate_lora.py",
-      "Evaluate 4 conditions: baseline (no LoRA, no rotation), LoRA without rotation, LoRA with rotation, LoRA with rotation removed at test time",
-      "Run on same pi_benchmark.jsonl + indirect PI benchmark",
-      "Generate Figure 10: ASR bar chart with ablation, saved as outputs/fig10_lora_ablation.png",
-      "Generate Figure 11: per-attack-type breakdown radar chart, saved as outputs/fig11_attack_breakdown.png",
-      "Verify: ablation (rotation removed) shows ASR increase → model learned to use type signal"
+      "Create experiments/extended_attacks.py",
+      "Test: multilingual PI (payload in Chinese/Japanese/Arabic), long-context PI (hidden in 32k+ doc), nested PI (fake multi-turn in user input)",
+      "Evaluate rotation defense on each scenario",
+      "Verify: type rotation effective regardless of language or context length"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 3
   },
   {
-    "category": "finalize",
-    "description": "Generate summary figure and compile results",
+    "category": "experiment_F",
+    "description": "F3: Combination with other defenses (instruction hierarchy, input filtering, output detection)",
+    "id": "F3",
+    "depends_on": ["D1"],
     "steps": [
-      "Create Figure 12: conceptual diagram (standard transformer vs typed context) as SVG or PNG, saved as outputs/fig12_conceptual.png",
-      "Create outputs/results_summary.md: compile all metrics, key findings, and figure references",
-      "Ensure all 12 figures are in outputs/",
-      "Verify: outputs/results_summary.md exists and references all figures"
+      "Test rotation + instruction hierarchy training",
+      "Test rotation + perplexity-based input filtering",
+      "Test rotation + LLM judge output detection",
+      "Measure combined ASR (should be lower than either alone)",
+      "Verify: rotation is complementary to existing defenses"
     ],
-    "passes": true
+    "passes": false,
+    "tier": 3
+  },
+  {
+    "category": "experiment_G",
+    "description": "G2: Inputs closest to theoretical bound — attack surface analysis",
+    "id": "G2",
+    "depends_on": ["G1"],
+    "steps": [
+      "Analyze inputs where rho_actual is closest to rho_min",
+      "Characterize common features of these worst-case inputs",
+      "Check if worst-case inputs correlate with most effective PI attacks",
+      "Verify: establish link from certified bound to attack surface"
+    ],
+    "passes": false,
+    "tier": 3
+  },
+  {
+    "category": "experiment_H",
+    "description": "H1: Modality rotation for visual prompt injection (LLaVA)",
+    "id": "H1",
+    "depends_on": [],
+    "steps": [
+      "On LLaVA or similar VLM, assign different type rotations to image vs text tokens",
+      "Check attention pattern shift without affecting multimodal understanding",
+      "Construct visual prompt injection (text instructions embedded in images)",
+      "Test if modality rotation defends against visual PI",
+      "Verify: preliminary evidence that typed rotation extends to multimodal"
+    ],
+    "passes": false,
+    "tier": 3
+  },
+  {
+    "category": "experiment_H",
+    "description": "H2: Retrieval confidence rotation for RAG hallucination control",
+    "id": "H2",
+    "depends_on": [],
+    "steps": [
+      "Simulate RAG: system + user query + 3 retrieved docs with different confidence levels",
+      "Assign rotation angles proportional to confidence (high confidence = small angle, low = large angle)",
+      "Measure model dependence on each doc in generated response",
+      "Verify: lower confidence docs receive less attention authority"
+    ],
+    "passes": false,
+    "tier": 3
   }
 ]
 ```
 
 ---
 
+## Paper Figure List (from proj.md)
+
+Based on the follow-up experiments, the paper needs these core figures:
+
+1. **Conceptual diagram** — standard transformer vs typed context (already have: Fig 12)
+2. **Certified attention matrix** — 3x3 trust hierarchy with actual attention heatmap (Exp A1)
+3. **delta-ASR curve** — theoretical certified bound vs empirical ASR scatter + fit (Exp B1)
+4. **Security-utility frontier** — alpha or |S| as X, ASR + benign accuracy dual-Y (Exp A2 + D2)
+5. **Adaptive attack comparison** — GCG steps vs ASR for rotation and special token (Exp C1)
+6. **LoRA ablation bar chart** — already have (Fig 10), supplement with benign accuracy
+7. **Per-attack-type breakdown** — already have (Fig 11), supplement adaptive attack version
+8. **Bound tightness distribution** — rho_actual histogram with rho_min annotated (Exp G1)
+
+---
+
 ## Agent Instructions
 
 1. Read `activity.md` first to understand current state
-2. Read `proj.md` for detailed specifications, expected results, and code templates
-3. Find next task with `"passes": false`
-4. Complete all steps for that task
-5. Run the verification step to confirm correctness
-6. Update task to `"passes": true`
-7. Log completion in `activity.md`
-8. Repeat until all tasks pass
+2. Read `proj.md` for detailed experiment designs, hypotheses, and expected results
+3. Read `proj_v1.md` for original code templates and Phase 1-4 methodology
+4. Find next task with `"passes": false`, respecting dependency order and tier priority
+5. Complete all steps for that task
+6. Run the verification step to confirm correctness
+7. Update task to `"passes": true`
+8. Log completion in `activity.md`
+9. Repeat until all tasks pass
+
+**Priority order**: Work on Tier 1 tasks first (respecting dependencies), then Tier 2, then Tier 3.
+
+**Dependency notes**:
+- P1 (special token baseline) must be completed before C1, C2, B2
+- A1 must be completed before A2, B1, G1
+- D1 must be completed before D2, D3
+- E1 must be completed before E3
+- B1 + C1 must be completed before B2
 
 **Important:**
-- Only modify the `passes` field. Do not remove or rewrite tasks.
-- Each task should produce runnable code. Use `proj.md` code templates as starting points but adapt as needed.
-- If a step requires GPU and none is available, implement the code and verify it runs on a small synthetic input (2-3 samples, 1-2 layers).
-- Save all figures to `outputs/` with exact filenames specified in the steps.
-- When loading the model, check GPU availability first. If no GPU with enough VRAM, use CPU with a smaller slice of data for validation.
+- Each task should produce runnable code with `--synthetic` mode for CPU-only validation.
+- Use `proj.md` experiment designs as specifications but adapt code as needed.
+- If GPU is unavailable, implement code and verify on synthetic data.
+- Save all figures to `outputs/` with filenames specified in steps.
+- All new experiments build on the existing codebase (model/, utils.py, configs/).
 
 ---
 
 ## Completion Criteria
 
-All tasks marked with `"passes": true`
+All Tier 1 tasks marked with `"passes": true` for paper submission readiness.
+All Tier 2 tasks for paper strengthening.
+Tier 3 tasks are optional extensions.

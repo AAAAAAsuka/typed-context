@@ -29,6 +29,11 @@ def create_type_rotation(head_dim, type_id, target_subspaces, rotation_angle=mat
 
     When type_id=0: angle=0, cos=1, sin=0 → matches standard RoPE exactly.
 
+    Uses the half-half convention matching HuggingFace Llama RoPE:
+    subspace i corresponds to the 2D rotation plane (dim i, dim i + head_dim//2).
+    Both dimensions in each plane must receive the same rotation angle for
+    the cos(theta_A - theta_B) modulation property to hold exactly.
+
     Args:
         head_dim: dimension of each attention head (e.g. 128)
         type_id: 0=system/trusted, 1=user/untrusted, 2=external, ...
@@ -43,13 +48,14 @@ def create_type_rotation(head_dim, type_id, target_subspaces, rotation_angle=mat
     sin_vals = torch.zeros(head_dim)
 
     angle = type_id * rotation_angle
+    half = head_dim // 2
 
     for sub_idx in target_subspaces:
-        dim_start = sub_idx * 2
-        cos_vals[dim_start] = math.cos(angle)
-        cos_vals[dim_start + 1] = math.cos(angle)
-        sin_vals[dim_start] = math.sin(angle)
-        sin_vals[dim_start + 1] = math.sin(angle)
+        # Half-half convention: subspace i → dims (i, i + head_dim//2)
+        cos_vals[sub_idx] = math.cos(angle)
+        cos_vals[sub_idx + half] = math.cos(angle)
+        sin_vals[sub_idx] = math.sin(angle)
+        sin_vals[sub_idx + half] = math.sin(angle)
 
     return cos_vals, sin_vals
 
@@ -79,29 +85,27 @@ def apply_typed_rope(q, k, cos_pos, sin_pos, type_ids, target_subspaces,
     sin_out = sin_pos.clone()
 
     # Override target subspaces with type rotation
+    # Half-half convention: subspace i → dims (i, i + head_dim//2)
+    head_dim = cos_pos.shape[-1]
+    half = head_dim // 2
     unique_types = type_ids.unique()
     for type_val in unique_types:
         angle = type_val.float().item() * rotation_angle
         mask = (type_ids == type_val)  # (batch, seq_len)
+        mask_expanded = mask.unsqueeze(-1)  # (batch, seq_len, 1)
 
         for sub_idx in target_subspaces:
-            d0 = sub_idx * 2
-            d1 = d0 + 2
-
-            # Expand mask to match cos/sin shape
-            # cos_out shape: (batch, seq_len, head_dim) or (1, seq_len, head_dim)
-            mask_expanded = mask.unsqueeze(-1)  # (batch, seq_len, 1)
-
-            cos_out[..., d0:d1] = torch.where(
-                mask_expanded.expand_as(cos_out[..., d0:d1]),
-                torch.full_like(cos_out[..., d0:d1], math.cos(angle)),
-                cos_out[..., d0:d1]
-            )
-            sin_out[..., d0:d1] = torch.where(
-                mask_expanded.expand_as(sin_out[..., d0:d1]),
-                torch.full_like(sin_out[..., d0:d1], math.sin(angle)),
-                sin_out[..., d0:d1]
-            )
+            for dim_idx in [sub_idx, sub_idx + half]:
+                cos_out[..., dim_idx:dim_idx+1] = torch.where(
+                    mask_expanded.expand_as(cos_out[..., dim_idx:dim_idx+1]),
+                    torch.full_like(cos_out[..., dim_idx:dim_idx+1], math.cos(angle)),
+                    cos_out[..., dim_idx:dim_idx+1]
+                )
+                sin_out[..., dim_idx:dim_idx+1] = torch.where(
+                    mask_expanded.expand_as(sin_out[..., dim_idx:dim_idx+1]),
+                    torch.full_like(sin_out[..., dim_idx:dim_idx+1], math.sin(angle)),
+                    sin_out[..., dim_idx:dim_idx+1]
+                )
 
     # Apply combined rotation to Q and K
     # RoPE rotation: x_rotated = x * cos + rotate_half(x) * sin
