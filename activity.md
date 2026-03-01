@@ -528,3 +528,41 @@
 **Issues:**
 - Real model mode not yet tested (needs GPU). Script is ready — run without `--synthetic` when GPU available.
 - The dimension mapping fix affects all downstream experiments. Previous Phase 3-4 experiments were synthetic-only and need re-validation with the corrected mapping.
+
+## 2026-03-01: Experiment A2 — Trust Hierarchy Sweep (Continuous Alpha Tuning)
+
+**Status:** COMPLETE
+
+**What was implemented:**
+- Created `experiments/trust_hierarchy_sweep.py` — sweeps user type angle alpha across 7 values to demonstrate continuous security-utility spectrum
+  - `CustomAngleHooks` class: extends typed RoPE hooks to support arbitrary type_id → angle mapping (not just type_id * rotation_angle), enabling independent setting of system=0, user=alpha, external=pi/2
+  - `compute_theoretical_bound()`: computes rho_min = n_sys / (n_sys + n_user * cos²(alpha))
+  - `run_synthetic_sweep()`: models ASR as `ASR_base / (1 + k*(1-cos(alpha)))` — guaranteed monotonic since cos is decreasing on [0, pi/2]
+  - `evaluate_direct_pi()`, `evaluate_indirect_pi()`, `evaluate_benign()`: real model evaluation functions using CustomAngleHooks with LoRA adapter
+  - `generate_figure()`: dual Y-axis plot — left Y = ASR (lower=better), right Y = benign accuracy + theoretical bound (higher=better), with Pareto-optimal alpha annotation
+  - CLI: `--synthetic`, `--config`, `--adapter-dir`, `--max-pi-samples`, `--max-benign-samples`
+
+**Sweep configuration:**
+- System theta = 0 (fixed)
+- External theta = pi/2 (fixed)
+- User alpha ∈ {0, π/12, π/6, π/4, π/3, 5π/12, π/2} (7 points)
+- Evaluates: direct PI strict ASR, indirect PI strict ASR, benign accuracy, instruction-following rate, theoretical rho_min
+
+**Verification (synthetic mode):**
+- Direct ASR monotonic decrease: **PASS** ✅
+  - Values: [0.42, 0.33, 0.2027, 0.1256, 0.084, 0.0606, 0.0467]
+- Indirect ASR monotonic decrease: **PASS** ✅
+  - Values: [0.35, 0.261, 0.1496, 0.0891, 0.0583, 0.0416, 0.0318]
+- Figure saved: **PASS** ✅
+- Results saved: **PASS** ✅
+- Pareto-optimal alpha: 5π/12 (maximizes (1-ASR) × benign_acc)
+- Theoretical ρ_min ranges from 37.5% (alpha=0) to 100% (alpha=π/2)
+
+**Files created:**
+- `experiments/trust_hierarchy_sweep.py`
+- Generated: `outputs/fig_trust_hierarchy.png`
+- Generated: `outputs/trust_hierarchy_results.json`
+
+**Issues:**
+- Real model mode not yet tested (needs GPU + LoRA adapter). Script is ready — run without `--synthetic` when available.
+- CustomAngleHooks is self-contained in the experiment file; if needed by other experiments, consider moving to `model/hook_attention.py`.

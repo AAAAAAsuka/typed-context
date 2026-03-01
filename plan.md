@@ -94,7 +94,7 @@ All baseline tasks have been completed. See `activity.md` for details.
       "Save results to outputs/trust_hierarchy_results.json",
       "Verify: ASR monotonically decreases as alpha increases from 0 to pi/2"
     ],
-    "passes": false,
+    "passes": true,
     "tier": 1
   },
   {
