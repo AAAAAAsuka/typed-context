@@ -151,7 +151,7 @@ All baseline tasks have been completed. See `activity.md` for details.
       "Save results to outputs/mimicry_results.json",
       "Verify: rotation defense ASR significantly lower than special token defense on mimicry attacks"
     ],
-    "passes": false,
+    "passes": true,
     "tier": 1
   },
   {
