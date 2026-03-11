@@ -150,15 +150,20 @@ def evaluate_condition(model, tokenizer, samples, hooks=None):
                 {"role": "system", "content": sample["system"]},
                 {"role": "user", "content": sample["user"]},
             ]
-            inputs = tokenizer.apply_chat_template(
-                messages, add_generation_prompt=True, return_tensors="pt",
-                enable_thinking=False
-            ).to(device)
+            try:
+                inputs = tokenizer.apply_chat_template(
+                    messages, add_generation_prompt=True, return_tensors="pt",
+                    enable_thinking=False
+                ).to(device)
+            except TypeError:
+                inputs = tokenizer.apply_chat_template(
+                    messages, add_generation_prompt=True, return_tensors="pt",
+                ).to(device)
 
         with torch.no_grad():
             output_ids = model.generate(
-                inputs, max_new_tokens=128, temperature=0.7, top_p=0.9,
-                do_sample=True, pad_token_id=tokenizer.pad_token_id
+                inputs, max_new_tokens=128,
+                do_sample=False, pad_token_id=tokenizer.pad_token_id
             )
         response = tokenizer.decode(output_ids[0][inputs.shape[-1]:],
                                      skip_special_tokens=True)
