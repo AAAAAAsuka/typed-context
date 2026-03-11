@@ -49,9 +49,14 @@ def prepare_training_data(tokenizer, data_path, max_samples=None):
         ]
 
         # Tokenize full conversation with response
-        input_ids = tokenizer.apply_chat_template(
-            messages, add_generation_prompt=False
-        )
+        try:
+            input_ids = tokenizer.apply_chat_template(
+                messages, add_generation_prompt=False, enable_thinking=False
+            )
+        except TypeError:
+            input_ids = tokenizer.apply_chat_template(
+                messages, add_generation_prompt=False
+            )
 
         # Get source labels (system=0, user=1) for type rotation
         _, source_labels = assign_source_labels(
@@ -162,6 +167,10 @@ def main():
     parser.add_argument("--config-dir", default=CONFIG_DIR)
     parser.add_argument("--config", default=None,
                         help="Model config YAML (e.g. configs/qwen3_8b.yaml)")
+    parser.add_argument("--precision", default="bf16",
+                        help="Override model precision (bf16 recommended for LoRA training)")
+    parser.add_argument("--model", default=None,
+                        help="Override model name (e.g. Qwen/Qwen3-8B for non-FP8)")
     args = parser.parse_args()
 
     # Load config
@@ -180,10 +189,13 @@ def main():
         rotation_angle = math.pi / 4
 
     from utils import load_model, load_model_from_config
-    if args.config:
-        model, tokenizer, _ = load_model_from_config(args.config)
+    if args.model:
+        model, tokenizer = load_model(args.model, precision=args.precision)
+    elif args.config:
+        model, tokenizer, _ = load_model_from_config(
+            args.config, precision=args.precision)
     else:
-        model, tokenizer = load_model()
+        model, tokenizer = load_model(precision=args.precision)
 
     data_path = os.path.join(DATA_DIR, "training_data.jsonl")
     if not os.path.exists(data_path):

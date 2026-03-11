@@ -195,6 +195,8 @@ def main():
                         help="Model config YAML (e.g. configs/qwen3_8b.yaml)")
     parser.add_argument("--adapter-dir", default=os.path.join(OUTPUT_DIR, "lora_adapter"))
     parser.add_argument("--num-samples", type=int, default=200)
+    parser.add_argument("--model", default=None,
+                        help="Override model name (must match adapter base model)")
     args = parser.parse_args()
 
     import torch
@@ -230,7 +232,9 @@ def main():
     # Condition 1: Baseline (no LoRA, no rotation)
     print("\n=== Condition: Baseline ===")
     print("Loading base model...")
-    if args.config:
+    if args.model:
+        model, tokenizer = load_model(args.model, precision="bf16")
+    elif args.config:
         model, tokenizer, _ = load_model_from_config(args.config)
     else:
         model, tokenizer = load_model()
