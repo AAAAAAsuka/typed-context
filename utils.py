@@ -111,9 +111,15 @@ def apply_chat_template(tokenizer, system_content, user_content, add_generation_
         {"role": "system", "content": system_content},
         {"role": "user", "content": user_content},
     ]
-    input_ids = tokenizer.apply_chat_template(
-        messages, add_generation_prompt=add_generation_prompt
-    )
+    try:
+        input_ids = tokenizer.apply_chat_template(
+            messages, add_generation_prompt=add_generation_prompt,
+            enable_thinking=False
+        )
+    except TypeError:
+        input_ids = tokenizer.apply_chat_template(
+            messages, add_generation_prompt=add_generation_prompt
+        )
     return input_ids
 
 
@@ -135,7 +141,14 @@ def assign_source_labels(tokenizer, system_content, user_content, add_generation
     """
     # Tokenize system-only to find boundary
     sys_messages = [{"role": "system", "content": system_content}]
-    sys_ids = tokenizer.apply_chat_template(sys_messages, add_generation_prompt=False)
+    try:
+        sys_ids = tokenizer.apply_chat_template(
+            sys_messages, add_generation_prompt=False, enable_thinking=False
+        )
+    except TypeError:
+        sys_ids = tokenizer.apply_chat_template(
+            sys_messages, add_generation_prompt=False
+        )
     sys_len = len(sys_ids)
 
     # Tokenize full conversation
