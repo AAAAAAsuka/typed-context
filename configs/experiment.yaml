@@ -1,6 +1,6 @@
-baseline_ppl: 10.1058854699239
+baseline_ppl: 10.284006389180671
 chosen_num_subspaces: 5
-max_safe_angle: 0.2
+max_safe_angle: 0.5
 ppl_threshold: 0.05
 target_subspaces:
 - 59
