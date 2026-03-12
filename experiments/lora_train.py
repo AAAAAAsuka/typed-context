@@ -197,7 +197,12 @@ def main():
     else:
         model, tokenizer = load_model(precision=args.precision)
 
-    data_path = os.path.join(DATA_DIR, "training_data.jsonl")
+    # Prefer v3 training data (model-generated benign + curated refusals)
+    data_path = os.path.join(DATA_DIR, "training_data_v3.jsonl")
+    if not os.path.exists(data_path):
+        data_path = os.path.join(DATA_DIR, "training_data_v2.jsonl")
+    if not os.path.exists(data_path):
+        data_path = os.path.join(DATA_DIR, "training_data.jsonl")
     if not os.path.exists(data_path):
         print("Training data not found. Run data/build_training_data.py first.")
         sys.exit(1)

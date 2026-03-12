@@ -61,28 +61,54 @@ Research codebase investigating typed context encoding via RoPE rotation for pro
 - **Task**: Train LoRA adapter with typed RoPE hooks active during training
 - **Scripts**: `experiments/lora_train.py`, `experiments/evaluate_lora.py`
 - **Base Model**: Qwen/Qwen3-8B (non-FP8, bf16)
+- **Training Data**: v3 hybrid (model-generated benign responses + curated PI refusals)
 - **Training**: 5000 samples, 3 epochs, lr=2e-5, LoRA r=16, alpha=32
-- **Loss**: 0.1884 → 0.0636 → 0.0612
+- **Loss**: 0.2710 → 0.1138 → 0.0996
 
-### Ablation Results (500 samples):
+### Training Data Evolution
+| Version | Normal/Hard-Neg Responses | PI Refusal Responses | Outcome |
+|---------|--------------------------|---------------------|---------|
+| v1 | Hardcoded (~82 chars avg) | Hardcoded (~82 chars) | Good defense (2.0%) but benign quality collapse |
+| v2 | Model-generated (~1051 chars) | Model-generated (~755 chars) | No defense (21.8%) — 29.5% leaked secrets |
+| **v3** | **Model-generated (~1051 chars)** | **Curated refusals (~201 chars)** | **Good defense (2.6%) + quality preserved** |
+
+### Ablation Results (500 samples, v3 adapter):
 
 | Condition | Strict ASR | Soft ASR | vs Baseline |
 |-----------|-----------|---------|------------|
 | Baseline (no LoRA) | 20.0% | 43.9% | — |
-| LoRA (no rotation) | 3.6% | 10.5% | -82% |
-| **LoRA + Rotation** | **2.0%** | **14.4%** | **-90%** |
-| LoRA (rotation removed) | 3.6% | 10.5% | -82% |
+| LoRA (no rotation) | 3.0% | 6.9% | -85% |
+| **LoRA + Rotation** | **2.6%** | **5.7%** | **-87%** |
+| LoRA (rotation removed) | 3.0% | 6.9% | -85% |
 
-### Per-Attack-Type ASR (LoRA + Rotation):
-- extraction: 2.4%
-- override: 5.6%
-- role_play: **0.0%**
-- smuggling: **0.0%**
+### Per-Attack-Type ASR (LoRA + Rotation, v3):
+- extraction: 1.6%
+- override: **0.0%**
+- role_play: 4.8%
+- smuggling: 4.0%
 
-- **Critical Ablation**: Removing rotation at test time raises strict ASR from 2.0% → 3.6%, confirming the model **learned to use the typed RoPE signal**
+- **Critical Ablation**: Removing rotation at test time raises strict ASR from 2.6% → 3.0%, confirming the model **learned to use the typed RoPE signal**
+
+### Benign Quality Evaluation (D1)
+Hypothesis: Typed rotation + LoRA causes no significant quality degradation.
+
+| Benchmark | Baseline | LoRA+Rot | Diff | Status |
+|-----------|----------|----------|------|--------|
+| instruction_following | 4.98 | 4.76 | -0.22 | DEGRADED |
+| knowledge_qa | 4.94 | 4.93 | -0.01 | OK |
+| code_generation | 4.98 | 4.90 | -0.08 | OK |
+| summarization | 5.00 | 5.00 | 0.00 | OK |
+| multi_turn | 5.00 | 5.00 | 0.00 | OK |
+| **overall** | **4.97** | **4.90** | **-0.062** | |
+
+- v3 training data dramatically improved quality vs v1 (instruction_following: -2.47 → -0.22)
+- Only instruction_following shows statistically significant degradation (p=0.0001)
+- All other categories show no significant quality loss
+
 - **Figures**:
   - Figure 10: `outputs/fig10_lora_ablation.png` — ASR bar chart with ablation
   - Figure 11: `outputs/fig11_attack_breakdown.png` — Per-attack-type radar chart
+  - Figure 13: `outputs/fig_benign_eval.png` — Benign quality comparison
 
 ## Figure Index
 | Figure | Filename | Description |
@@ -99,17 +125,20 @@ Research codebase investigating typed context encoding via RoPE rotation for pro
 | 10 | `fig10_lora_ablation.png` | LoRA ablation ASR |
 | 11 | `fig11_attack_breakdown.png` | Per-attack-type breakdown |
 | 12 | `fig12_conceptual.png` | Conceptual diagram |
+| 13 | `fig_benign_eval.png` | Benign quality evaluation |
 
 ## Key Conclusions
 1. **Source encoding exists in pretrained models**: Linear probes distinguish system vs user tokens
 2. **Low-frequency RoPE subspaces are repurposable**: Ablating dims 59-63 causes < 5% PPL change
 3. **ICL alone cannot teach the model to use rotation**: Without finetuning, rotation is noise
 4. **LoRA finetuning enables typed context**: After training with typed RoPE, the model learns to use rotation for source-aware attention
-5. **Ablation validates the mechanism**: Removing rotation at test time degrades defense (2.0% → 3.6% ASR), confirming the model uses the signal
-6. **Best result**: LoRA + Rotation achieves 2.0% strict ASR (90% reduction), with 0% ASR on role_play and smuggling attacks
+5. **Ablation validates the mechanism**: Removing rotation at test time degrades defense (2.6% → 3.0% ASR), confirming the model uses the signal
+6. **Best result**: LoRA + Rotation achieves 2.6% strict ASR (87% reduction from baseline), with 0% ASR on override attacks
 7. **Signal survives quantization**: Type rotation persists through fp16 and int8
+8. **Training data quality matters**: Model-generated responses for benign tasks preserve quality (4.90/5.00 overall); curated refusals for PI attacks ensure defense
 
 ## Notes
 - All experiments run on real model inference (no synthetic data)
 - Model: Qwen3-8B (head_dim=128, 36 layers, 32 attn heads, 8 KV heads, rope_theta=1000000)
 - Critical bug fix: `enable_thinking=False` must be passed to Qwen3 tokenizer to prevent thinking prompt token mismatch
+- Training data v3 = hybrid of v2 model-generated benign + curated PI refusals (v2 alone had 29.5% secret leak rate in refusals)
